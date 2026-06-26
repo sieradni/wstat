@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "dgSpecHash": "NmQUrg9M7Bc=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\micha\\Code\\wstat\\src\\Wstat.Desktop\\Wstat.Desktop.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\micha\\.nuget\\packages\\h.generatedicons.system.drawing\\2.2.0\\h.generatedicons.system.drawing.2.2.0.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\h.notifyicon\\2.2.0\\h.notifyicon.2.2.0.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\h.notifyicon.wpf\\2.2.0\\h.notifyicon.wpf.2.2.0.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\microsoft.data.sqlite\\9.0.3\\microsoft.data.sqlite.9.0.3.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\microsoft.data.sqlite.core\\9.0.3\\microsoft.data.sqlite.core.9.0.3.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\microsoft.win32.systemevents\\9.0.0\\microsoft.win32.systemevents.9.0.0.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\sqlitepclraw.bundle_e_sqlite3\\2.1.10\\sqlitepclraw.bundle_e_sqlite3.2.1.10.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\sqlitepclraw.core\\2.1.10\\sqlitepclraw.core.2.1.10.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\sqlitepclraw.lib.e_sqlite3\\2.1.10\\sqlitepclraw.lib.e_sqlite3.2.1.10.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\sqlitepclraw.provider.e_sqlite3\\2.1.10\\sqlitepclraw.provider.e_sqlite3.2.1.10.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\system.drawing.common\\9.0.0\\system.drawing.common.9.0.0.nupkg.sha512",
+    "C:\\Users\\micha\\.nuget\\packages\\system.memory\\4.5.3\\system.memory.4.5.3.nupkg.sha512"
+  ],
+  "logs": []
+}

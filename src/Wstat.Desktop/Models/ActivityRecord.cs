@@ -1,0 +1,61 @@
+namespace Wstat.Desktop.Models;
+
+public class ActivityRecord
+{
+    public int Id { get; set; }
+    public string AppName { get; set; } = string.Empty;
+    public string WindowTitle { get; set; } = string.Empty;
+    public string? BrowserUrl { get; set; }
+    public DateTime StartTime { get; set; }
+    public DateTime? EndTime { get; set; }
+    public int DurationSeconds { get; set; }
+
+    public string DisplayDuration =>
+        EndTime.HasValue
+            ? FormatDuration(DurationSeconds)
+            : FormatDuration((int)(DateTime.Now - StartTime).TotalSeconds);
+
+    public bool IsActive => EndTime == null;
+
+    private static string FormatDuration(int seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? $"{(int)ts.TotalHours}h {ts.Minutes}m"
+            : $"{ts.Minutes}m {ts.Seconds}s";
+    }
+}
+
+public class AppSummary
+{
+    public string AppName { get; set; } = string.Empty;
+    public long TotalSeconds { get; set; }
+    public string DisplayTime
+    {
+        get
+        {
+            var ts = TimeSpan.FromSeconds(TotalSeconds);
+            return ts.TotalHours >= 1
+                ? $"{(int)ts.TotalHours}h {ts.Minutes}m"
+                : $"{ts.Minutes}m {ts.Seconds}s";
+        }
+    }
+}
+
+public class UrlSummary
+{
+    public string Url { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public int VisitCount { get; set; }
+    public long TotalSeconds { get; set; }
+    public string DisplayTime
+    {
+        get
+        {
+            var ts = TimeSpan.FromSeconds(TotalSeconds);
+            return ts.TotalHours >= 1
+                ? $"{(int)ts.TotalHours}h {ts.Minutes}m"
+                : $"{ts.Minutes}m {ts.Seconds}s";
+        }
+    }
+}

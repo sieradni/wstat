@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "wstat Tab Tracker",
+  "version": "1.0",
+  "description": "Sends active tab info to the wstat desktop app",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "wstat@sieradni.com"
+    }
+  },
+
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+
+  "background": {
+    "scripts": ["background.js"]
+  },
+
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  }
+}
