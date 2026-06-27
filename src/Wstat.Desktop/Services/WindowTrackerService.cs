@@ -111,7 +111,10 @@ public class WindowTrackerService : IDisposable
             if (hWnd == IntPtr.Zero || string.IsNullOrEmpty(processPath))
             {
                 if (_currentRecord != null)
+                {
+                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} ZERO-HWND close={_currentRecord.AppName}\n");
                     CloseCurrentRecord();
+                }
                 return;
             }
 
@@ -125,6 +128,7 @@ public class WindowTrackerService : IDisposable
                     IsIdle = true;
                     _wasIdle = true;
                     IdleStateChanged?.Invoke(true);
+                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} IDLE enter\n");
                 }
                 else
                 {
@@ -134,6 +138,7 @@ public class WindowTrackerService : IDisposable
                     StartNewRecord(processPath, windowTitle ?? "", appName);
                     _lastProcessPath = processPath;
                     _lastWindowTitle = windowTitle ?? "";
+                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} IDLE exit path={appName}\n");
                 }
                 return;
             }
@@ -151,16 +156,19 @@ public class WindowTrackerService : IDisposable
                     _pendingWindowTitle = windowTitle ?? "";
                     _pendingAppName = appName;
                     _pendingCount = 1;
+                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE first-sight path={appName}\n");
                 }
                 else if (processPath == _pendingProcessPath &&
                          _pendingCount < 2)
                 {
                     // Still the same new process, count up
                     _pendingCount++;
+                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE increment path={appName} count={_pendingCount}\n");
                 }
                 else if (processPath != _pendingProcessPath)
                 {
                     // A third process appeared before debounce settled
+                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE third-process pending={_pendingAppName} now={appName}\n");
                     CloseCurrentRecord();
                     _pendingProcessPath = null;
                     _pendingCount = 0;
@@ -172,6 +180,7 @@ public class WindowTrackerService : IDisposable
                 // Check if we should commit the pending switch
                 if (_pendingProcessPath != null && _pendingCount >= 2)
                 {
+                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE commit path={_pendingAppName}\n");
                     CloseCurrentRecord();
                     StartNewRecord(_pendingProcessPath, _pendingWindowTitle ?? "", _pendingAppName!);
                     _lastProcessPath = _pendingProcessPath;
@@ -193,6 +202,7 @@ public class WindowTrackerService : IDisposable
                 if (_pendingProcessPath != null)
                 {
                     // We were about to switch but the user came back — cancel
+                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE cancel path={_pendingAppName}\n");
                     _pendingProcessPath = null;
                     _pendingCount = 0;
                 }
@@ -214,6 +224,12 @@ public class WindowTrackerService : IDisposable
                     _db.InsertOrUpdateActive(_currentRecord);
                     RecordUpdated?.Invoke(_currentRecord);
                     _lastWindowTitle = windowTitle ?? "";
+                }
+                else if (_lastProcessPath != null)
+                {
+                    StartNewRecord(processPath, windowTitle ?? "", appName);
+                    _lastWindowTitle = windowTitle ?? "";
+                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} RECOVER restart={appName}\n");
                 }
             }
 
