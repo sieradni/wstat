@@ -48,24 +48,44 @@ public class WindowTrackerService : IDisposable
         CloseCurrentRecord();
     }
 
+    private static readonly string LogPath = CreateLogPath();
+
+    private static string CreateLogPath()
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "wstat");
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, "trace.log");
+    }
+
     public void SetBrowserTab(string url, string title)
     {
         _latestBrowserUrl = url;
         _latestBrowserTitle = title;
 
-        if (_currentRecord != null && !_wasIdle)
+        // Only store http/https URLs
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
-            var appName = Path.GetFileNameWithoutExtension(_lastProcessPath ?? "")?.ToLowerInvariant();
-            if (appName == "firefox")
+            return;
+        }
+
+        if (_currentRecord != null && !_wasIdle &&
+            string.Equals(_currentRecord.AppName, "firefox.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            _currentRecord.BrowserUrl = url;
+            _currentRecord.WindowTitle = title;
+            if (_currentRecord.Id != 0)
             {
-                _currentRecord.BrowserUrl = url;
-                _currentRecord.WindowTitle = title;
-                if (_currentRecord.Id != 0)
-                {
-                    _db.UpdateBrowserUrl(_currentRecord.Id, url);
-                }
-                RecordUpdated?.Invoke(_currentRecord);
+                _db.UpdateBrowserUrl(_currentRecord.Id, url);
             }
+            RecordUpdated?.Invoke(_currentRecord);
+            File.AppendAllText(LogPath, $"{DateTime.Now:O} STORED: {title} ({url})\n");
+        }
+        else
+        {
+            File.AppendAllText(LogPath, $"{DateTime.Now:O} SKIPPED: curr={_currentRecord?.AppName}, idle={_wasIdle}, url={url}\n");
         }
     }
 
@@ -148,6 +168,7 @@ public class WindowTrackerService : IDisposable
                 ? _latestBrowserTitle
                 : windowTitle,
             BrowserUrl = isFirefox ? _latestBrowserUrl : null,
+            ProcessPath = processPath,
             StartTime = DateTime.Now
         };
 

@@ -13,9 +13,6 @@ C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\Wstat.Deskt
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\Wstat.Desktop.runtimeconfig.json
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\Wstat.Desktop.dll
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\Wstat.Desktop.pdb
-C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\H.GeneratedIcons.System.Drawing.dll
-C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\H.NotifyIcon.dll
-C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\H.NotifyIcon.Wpf.dll
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\Microsoft.Data.Sqlite.dll
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\SQLitePCLRaw.batteries_v2.dll
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\bin\Debug\net9.0-windows\SQLitePCLRaw.core.dll
@@ -47,3 +44,4 @@ C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\refint\Wsta
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\Wstat.Desktop.pdb
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\Wstat.Desktop.genruntimeconfig.cache
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\ref\Wstat.Desktop.dll
+C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\Wstat.Desktop.sourcelink.json

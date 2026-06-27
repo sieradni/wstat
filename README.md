@@ -69,10 +69,12 @@ The main window has two tabs:
 #### Applications tab
 - Lists all foreground apps tracked today (or filtered period)
 - Shows total time spent per application
-- Columns: Application name, Time spent
+- Columns: Application icon, Application name, Time spent
+- Icons are extracted from each executable via the Windows API
 
 #### Websites tab
 - Lists URLs tracked via the Firefox extension
+- Each URL shows its most recent page title
 - Columns: URL, Page title, Visit count, Time spent
 
 #### Date filters
@@ -146,6 +148,9 @@ src/
 - **Write-on-change**: Database writes only on window change or idle transition. Active records are updated in-place with running duration.
 - **HTTP not WebSocket**: Simpler for a unidirectional data flow (extension → desktop app). No connection management overhead.
 - **Manual DI**: No DI container — services are created and wired in `App.xaml.cs`. Keeps the project small and easy to understand.
+- **WinForms NotifyIcon**: System tray uses `System.Windows.Forms.NotifyIcon` (not a third-party library) for reliable tray integration on all Windows versions.
+- **App icons**: Icons are extracted via `Icon.ExtractAssociatedIcon()` and cached per process path. Displayed as 16×16 images in the Applications DataGrid.
+- **DB schema evolution**: New columns are added via `ALTER TABLE` wrapped in a try/catch, so existing databases are migrated forward without data loss.
 
 ### Extending the App
 
@@ -200,5 +205,38 @@ dotnet sqlite "$env:LOCALAPPDATA\wstat\wstat.db" "SELECT * FROM ActivityLog ORDE
 | No data in dashboard | App just started | Interact with windows; data appears on next state change |
 | Firefox URLs not tracked | Extension not loaded | Load it temporarily via `about:debugging` |
 | Extension can't connect | Desktop app not running | Start the desktop app first; extension handles this gracefully |
-| HTTP listener error | Port 12345 in use | Close the other application using port 12345, or change the port in `LocalHttpServer.cs` and `background.js` |
+| Port 12345 in use | Another app on that port | Kill the other process or change the port in `LocalHttpServer.cs` and `background.js` |
 | DB file location | Default path | `%LOCALAPPDATA%\wstat\wstat.db` |
+| Trace log | Debugging extension data | `%LOCALAPPDATA%\wstat\trace.log` — shows every received/skipped tab event |
+
+### Checking the trace log
+
+If websites aren't appearing, check the trace log for diagnostic info:
+
+```powershell
+type "$env:LOCALAPPDATA\wstat\trace.log"
+```
+
+The log shows every tab event the server receives, whether it was stored or skipped, and why. Example output:
+```
+2026-06-26T16:45:00.1234567 STORED: Example Site (https://example.com)
+2026-06-26T16:45:02.4567890 SKIPPED: curr=firefox.exe, idle=False, url=https://other.com
+```
+
+### Cleaning old databases
+
+If the schema has changed, delete the old database to recreate it:
+```powershell
+Remove-Item "$env:LOCALAPPDATA\wstat\wstat.db"
+```
+
+The app recreates it automatically on next launch with the latest schema.
+
+## .gitignore
+
+A `.gitignore` is provided at the project root. It excludes:
+- `bin/`, `obj/` — .NET build output
+- `.vs/` — Visual Studio user settings
+- `*.user`, `*.suo` — per-user IDE files
+- `packages/`, `*.nupkg` — NuGet artifacts
+- `.DS_Store`, `Thumbs.db` — OS metadata files

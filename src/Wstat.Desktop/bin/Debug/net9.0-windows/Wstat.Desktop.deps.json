@@ -8,44 +8,10 @@
     ".NETCoreApp,Version=v9.0": {
       "Wstat.Desktop/1.0.0": {
         "dependencies": {
-          "H.NotifyIcon.Wpf": "2.2.0",
           "Microsoft.Data.Sqlite": "9.0.3"
         },
         "runtime": {
           "Wstat.Desktop.dll": {}
-        }
-      },
-      "H.GeneratedIcons.System.Drawing/2.2.0": {
-        "dependencies": {
-          "System.Drawing.Common": "9.0.0"
-        },
-        "runtime": {
-          "lib/net9.0/H.GeneratedIcons.System.Drawing.dll": {
-            "assemblyVersion": "2.0.0.0",
-            "fileVersion": "2.2.0.0"
-          }
-        }
-      },
-      "H.NotifyIcon/2.2.0": {
-        "dependencies": {
-          "H.GeneratedIcons.System.Drawing": "2.2.0"
-        },
-        "runtime": {
-          "lib/net9.0/H.NotifyIcon.dll": {
-            "assemblyVersion": "2.0.0.0",
-            "fileVersion": "2.2.0.0"
-          }
-        }
-      },
-      "H.NotifyIcon.Wpf/2.2.0": {
-        "dependencies": {
-          "H.NotifyIcon": "2.2.0"
-        },
-        "runtime": {
-          "lib/net9.0-windows7.0/H.NotifyIcon.Wpf.dll": {
-            "assemblyVersion": "2.0.0.0",
-            "fileVersion": "2.2.0.0"
-          }
         }
       },
       "Microsoft.Data.Sqlite/9.0.3": {
@@ -66,7 +32,6 @@
           }
         }
       },
-      "Microsoft.Win32.SystemEvents/9.0.0": {},
       "SQLitePCLRaw.bundle_e_sqlite3/2.1.10": {
         "dependencies": {
           "SQLitePCLRaw.lib.e_sqlite3": "2.1.10",
@@ -210,11 +175,6 @@
           }
         }
       },
-      "System.Drawing.Common/9.0.0": {
-        "dependencies": {
-          "Microsoft.Win32.SystemEvents": "9.0.0"
-        }
-      },
       "System.Memory/4.5.3": {}
     }
   },
@@ -223,27 +183,6 @@
       "type": "project",
       "serviceable": false,
       "sha512": ""
-    },
-    "H.GeneratedIcons.System.Drawing/2.2.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-KJ/hQZTtW3w8Rw8ktogAwY9AcVzpUldVprTD3eyQ1XyZINLHBQqgtu0ZArmuYlp+lUR0lsqAmaARXZIOFBWmQg==",
-      "path": "h.generatedicons.system.drawing/2.2.0",
-      "hashPath": "h.generatedicons.system.drawing.2.2.0.nupkg.sha512"
-    },
-    "H.NotifyIcon/2.2.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-x3rk9dLAXpMrfngnC7oHmYF4sULEpEdD9hLMIt0W41MZ8WYeCY63SeyJX1TKcvJ7BI24JciLxhXOuWrSRCEiQA==",
-      "path": "h.notifyicon/2.2.0",
-      "hashPath": "h.notifyicon.2.2.0.nupkg.sha512"
-    },
-    "H.NotifyIcon.Wpf/2.2.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-Xo9fjIpugBNfH6tdX1Z9hEmz1V47mC2N+SC1w2JNPaFnxAn8Ezch2GL/s7wx5BRmevkS7BqtdhozxxEI4JmfYA==",
-      "path": "h.notifyicon.wpf/2.2.0",
-      "hashPath": "h.notifyicon.wpf.2.2.0.nupkg.sha512"
     },
     "Microsoft.Data.Sqlite/9.0.3": {
       "type": "package",
@@ -258,13 +197,6 @@
       "sha512": "sha512-rhNmI4KqeL6bOtZ7KwLVZLjrj0Bnf0PFq5Nlv2uOj9n1UuPYTbJaa816EJH5Hp5FM04H2iUcFtmmvqrl3xRCmA==",
       "path": "microsoft.data.sqlite.core/9.0.3",
       "hashPath": "microsoft.data.sqlite.core.9.0.3.nupkg.sha512"
-    },
-    "Microsoft.Win32.SystemEvents/9.0.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-z8FfGIaoeALdD+KF44A2uP8PZIQQtDGiXsOLuN8nohbKhkyKt7zGaZb+fKiCxTuBqG22Q7myIAioSWaIcOOrOw==",
-      "path": "microsoft.win32.systemevents/9.0.0",
-      "hashPath": "microsoft.win32.systemevents.9.0.0.nupkg.sha512"
     },
     "SQLitePCLRaw.bundle_e_sqlite3/2.1.10": {
       "type": "package",
@@ -293,13 +225,6 @@
       "sha512": "sha512-uZVTi02C1SxqzgT0HqTWatIbWGb40iIkfc3FpFCpE/r7g6K0PqzDUeefL6P6HPhDtc6BacN3yQysfzP7ks+wSQ==",
       "path": "sqlitepclraw.provider.e_sqlite3/2.1.10",
       "hashPath": "sqlitepclraw.provider.e_sqlite3.2.1.10.nupkg.sha512"
-    },
-    "System.Drawing.Common/9.0.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-uoozjI3+dlgKh2onFJcz8aNLh6TRCPlLSh8Dbuljc8CdvqXrxHOVysJlrHvlsOCqceqGBR1wrMPxlnzzhynktw==",
-      "path": "system.drawing.common/9.0.0",
-      "hashPath": "system.drawing.common.9.0.0.nupkg.sha512"
     },
     "System.Memory/4.5.3": {
       "type": "package",

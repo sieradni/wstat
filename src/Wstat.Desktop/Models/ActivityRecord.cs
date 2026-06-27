@@ -1,3 +1,5 @@
+using System.Windows.Media.Imaging;
+
 namespace Wstat.Desktop.Models;
 
 public class ActivityRecord
@@ -6,6 +8,7 @@ public class ActivityRecord
     public string AppName { get; set; } = string.Empty;
     public string WindowTitle { get; set; } = string.Empty;
     public string? BrowserUrl { get; set; }
+    public string? ProcessPath { get; set; }
     public DateTime StartTime { get; set; }
     public DateTime? EndTime { get; set; }
     public int DurationSeconds { get; set; }
@@ -29,7 +32,9 @@ public class ActivityRecord
 public class AppSummary
 {
     public string AppName { get; set; } = string.Empty;
+    public string? ProcessPath { get; set; }
     public long TotalSeconds { get; set; }
+    public BitmapSource? Icon { get; set; }
     public string DisplayTime
     {
         get

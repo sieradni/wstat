@@ -49,6 +49,14 @@
                 <Grid>
                     <DataGrid ItemsSource="{Binding Applications}">
                         <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="" Width="30">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Image Source="{Binding Icon}" Width="16" Height="16"
+                                               Margin="2,0,0,0" Stretch="Uniform"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Application" Binding="{Binding AppName}" Width="*"/>
                             <DataGridTextColumn Header="Time Spent" Binding="{Binding DisplayTime}" Width="150"/>
                         </DataGrid.Columns>

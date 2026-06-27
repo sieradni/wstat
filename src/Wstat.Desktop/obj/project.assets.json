@@ -2,57 +2,6 @@
   "version": 3,
   "targets": {
     "net9.0-windows7.0": {
-      "H.GeneratedIcons.System.Drawing/2.2.0": {
-        "type": "package",
-        "dependencies": {
-          "System.Drawing.Common": "9.0.0"
-        },
-        "compile": {
-          "lib/net9.0/H.GeneratedIcons.System.Drawing.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net9.0/H.GeneratedIcons.System.Drawing.dll": {
-            "related": ".xml"
-          }
-        }
-      },
-      "H.NotifyIcon/2.2.0": {
-        "type": "package",
-        "dependencies": {
-          "H.GeneratedIcons.System.Drawing": "2.2.0"
-        },
-        "compile": {
-          "lib/net9.0/H.NotifyIcon.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net9.0/H.NotifyIcon.dll": {
-            "related": ".xml"
-          }
-        }
-      },
-      "H.NotifyIcon.Wpf/2.2.0": {
-        "type": "package",
-        "dependencies": {
-          "H.NotifyIcon": "2.2.0"
-        },
-        "compile": {
-          "lib/net9.0-windows7.0/H.NotifyIcon.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net9.0-windows7.0/H.NotifyIcon.Wpf.dll": {
-            "related": ".xml"
-          }
-        },
-        "frameworkReferences": [
-          "Microsoft.WindowsDesktop.App.WPF"
-        ]
-      },
       "Microsoft.Data.Sqlite/9.0.3": {
         "type": "package",
         "dependencies": {
@@ -80,28 +29,6 @@
         "runtime": {
           "lib/net8.0/Microsoft.Data.Sqlite.dll": {
             "related": ".xml"
-          }
-        }
-      },
-      "Microsoft.Win32.SystemEvents/9.0.0": {
-        "type": "package",
-        "compile": {
-          "lib/net9.0/Microsoft.Win32.SystemEvents.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net9.0/Microsoft.Win32.SystemEvents.dll": {
-            "related": ".xml"
-          }
-        },
-        "build": {
-          "buildTransitive/net8.0/_._": {}
-        },
-        "runtimeTargets": {
-          "runtimes/win/lib/net9.0/Microsoft.Win32.SystemEvents.dll": {
-            "assetType": "runtime",
-            "rid": "win"
           }
         }
       },
@@ -240,31 +167,6 @@
           "lib/net6.0-windows7.0/SQLitePCLRaw.provider.e_sqlite3.dll": {}
         }
       },
-      "System.Drawing.Common/9.0.0": {
-        "type": "package",
-        "dependencies": {
-          "Microsoft.Win32.SystemEvents": "9.0.0"
-        },
-        "compile": {
-          "lib/net9.0/System.Drawing.Common.dll": {
-            "related": ".pdb;.xml"
-          },
-          "lib/net9.0/System.Private.Windows.Core.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net9.0/System.Drawing.Common.dll": {
-            "related": ".pdb;.xml"
-          },
-          "lib/net9.0/System.Private.Windows.Core.dll": {
-            "related": ".xml"
-          }
-        },
-        "build": {
-          "buildTransitive/net8.0/_._": {}
-        }
-      },
       "System.Memory/4.5.3": {
         "type": "package",
         "compile": {
@@ -277,69 +179,6 @@
     }
   },
   "libraries": {
-    "H.GeneratedIcons.System.Drawing/2.2.0": {
-      "sha512": "KJ/hQZTtW3w8Rw8ktogAwY9AcVzpUldVprTD3eyQ1XyZINLHBQqgtu0ZArmuYlp+lUR0lsqAmaARXZIOFBWmQg==",
-      "type": "package",
-      "path": "h.generatedicons.system.drawing/2.2.0",
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "README.md",
-        "h.generatedicons.system.drawing.2.2.0.nupkg.sha512",
-        "h.generatedicons.system.drawing.nuspec",
-        "lib/net462/H.GeneratedIcons.System.Drawing.dll",
-        "lib/net462/H.GeneratedIcons.System.Drawing.xml",
-        "lib/net8.0/H.GeneratedIcons.System.Drawing.dll",
-        "lib/net8.0/H.GeneratedIcons.System.Drawing.xml",
-        "lib/net9.0/H.GeneratedIcons.System.Drawing.dll",
-        "lib/net9.0/H.GeneratedIcons.System.Drawing.xml",
-        "lib/netstandard2.0/H.GeneratedIcons.System.Drawing.dll",
-        "lib/netstandard2.0/H.GeneratedIcons.System.Drawing.xml",
-        "nuget_icon.png"
-      ]
-    },
-    "H.NotifyIcon/2.2.0": {
-      "sha512": "x3rk9dLAXpMrfngnC7oHmYF4sULEpEdD9hLMIt0W41MZ8WYeCY63SeyJX1TKcvJ7BI24JciLxhXOuWrSRCEiQA==",
-      "type": "package",
-      "path": "h.notifyicon/2.2.0",
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "README.md",
-        "h.notifyicon.2.2.0.nupkg.sha512",
-        "h.notifyicon.nuspec",
-        "lib/net462/H.NotifyIcon.dll",
-        "lib/net462/H.NotifyIcon.xml",
-        "lib/net8.0/H.NotifyIcon.dll",
-        "lib/net8.0/H.NotifyIcon.xml",
-        "lib/net9.0/H.NotifyIcon.dll",
-        "lib/net9.0/H.NotifyIcon.xml",
-        "lib/netstandard2.0/H.NotifyIcon.dll",
-        "lib/netstandard2.0/H.NotifyIcon.xml",
-        "nuget_icon.png"
-      ]
-    },
-    "H.NotifyIcon.Wpf/2.2.0": {
-      "sha512": "Xo9fjIpugBNfH6tdX1Z9hEmz1V47mC2N+SC1w2JNPaFnxAn8Ezch2GL/s7wx5BRmevkS7BqtdhozxxEI4JmfYA==",
-      "type": "package",
-      "path": "h.notifyicon.wpf/2.2.0",
-      "hasTools": true,
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "README.md",
-        "h.notifyicon.wpf.2.2.0.nupkg.sha512",
-        "h.notifyicon.wpf.nuspec",
-        "lib/net462/H.NotifyIcon.Wpf.dll",
-        "lib/net462/H.NotifyIcon.Wpf.xml",
-        "lib/net8.0-windows7.0/H.NotifyIcon.Wpf.dll",
-        "lib/net8.0-windows7.0/H.NotifyIcon.Wpf.xml",
-        "lib/net9.0-windows7.0/H.NotifyIcon.Wpf.dll",
-        "lib/net9.0-windows7.0/H.NotifyIcon.Wpf.xml",
-        "nuget_icon.png",
-        "tools/VisualStudioToolsManifest.xml"
-      ]
-    },
     "Microsoft.Data.Sqlite/9.0.3": {
       "sha512": "rqw1EZ30C6bRTQ2P9/UVWNpiJhw+n4YtmBqoXXlxpdZuACvGDIZcOsOv2WPjL8HHdOJvTIh8yOufJI0HLWfAoA==",
       "type": "package",
@@ -371,38 +210,6 @@
         "lib/netstandard2.0/Microsoft.Data.Sqlite.xml",
         "microsoft.data.sqlite.core.9.0.3.nupkg.sha512",
         "microsoft.data.sqlite.core.nuspec"
-      ]
-    },
-    "Microsoft.Win32.SystemEvents/9.0.0": {
-      "sha512": "z8FfGIaoeALdD+KF44A2uP8PZIQQtDGiXsOLuN8nohbKhkyKt7zGaZb+fKiCxTuBqG22Q7myIAioSWaIcOOrOw==",
-      "type": "package",
-      "path": "microsoft.win32.systemevents/9.0.0",
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "Icon.png",
-        "LICENSE.TXT",
-        "PACKAGE.md",
-        "THIRD-PARTY-NOTICES.TXT",
-        "buildTransitive/net461/Microsoft.Win32.SystemEvents.targets",
-        "buildTransitive/net462/_._",
-        "buildTransitive/net8.0/_._",
-        "buildTransitive/netcoreapp2.0/Microsoft.Win32.SystemEvents.targets",
-        "lib/net462/Microsoft.Win32.SystemEvents.dll",
-        "lib/net462/Microsoft.Win32.SystemEvents.xml",
-        "lib/net8.0/Microsoft.Win32.SystemEvents.dll",
-        "lib/net8.0/Microsoft.Win32.SystemEvents.xml",
-        "lib/net9.0/Microsoft.Win32.SystemEvents.dll",
-        "lib/net9.0/Microsoft.Win32.SystemEvents.xml",
-        "lib/netstandard2.0/Microsoft.Win32.SystemEvents.dll",
-        "lib/netstandard2.0/Microsoft.Win32.SystemEvents.xml",
-        "microsoft.win32.systemevents.9.0.0.nupkg.sha512",
-        "microsoft.win32.systemevents.nuspec",
-        "runtimes/win/lib/net8.0/Microsoft.Win32.SystemEvents.dll",
-        "runtimes/win/lib/net8.0/Microsoft.Win32.SystemEvents.xml",
-        "runtimes/win/lib/net9.0/Microsoft.Win32.SystemEvents.dll",
-        "runtimes/win/lib/net9.0/Microsoft.Win32.SystemEvents.xml",
-        "useSharedDesignerContext.txt"
       ]
     },
     "SQLitePCLRaw.bundle_e_sqlite3/2.1.10": {
@@ -497,48 +304,6 @@
         "sqlitepclraw.provider.e_sqlite3.nuspec"
       ]
     },
-    "System.Drawing.Common/9.0.0": {
-      "sha512": "uoozjI3+dlgKh2onFJcz8aNLh6TRCPlLSh8Dbuljc8CdvqXrxHOVysJlrHvlsOCqceqGBR1wrMPxlnzzhynktw==",
-      "type": "package",
-      "path": "system.drawing.common/9.0.0",
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "Icon.png",
-        "LICENSE.TXT",
-        "PACKAGE.md",
-        "THIRD-PARTY-NOTICES.TXT",
-        "buildTransitive/net461/System.Drawing.Common.targets",
-        "buildTransitive/net462/_._",
-        "buildTransitive/net8.0/_._",
-        "buildTransitive/netcoreapp2.0/System.Drawing.Common.targets",
-        "lib/MonoAndroid10/_._",
-        "lib/MonoTouch10/_._",
-        "lib/net462/System.Drawing.Common.dll",
-        "lib/net462/System.Drawing.Common.pdb",
-        "lib/net462/System.Drawing.Common.xml",
-        "lib/net8.0/System.Drawing.Common.dll",
-        "lib/net8.0/System.Drawing.Common.pdb",
-        "lib/net8.0/System.Drawing.Common.xml",
-        "lib/net8.0/System.Private.Windows.Core.dll",
-        "lib/net8.0/System.Private.Windows.Core.xml",
-        "lib/net9.0/System.Drawing.Common.dll",
-        "lib/net9.0/System.Drawing.Common.pdb",
-        "lib/net9.0/System.Drawing.Common.xml",
-        "lib/net9.0/System.Private.Windows.Core.dll",
-        "lib/net9.0/System.Private.Windows.Core.xml",
-        "lib/netstandard2.0/System.Drawing.Common.dll",
-        "lib/netstandard2.0/System.Drawing.Common.pdb",
-        "lib/netstandard2.0/System.Drawing.Common.xml",
-        "lib/xamarinios10/_._",
-        "lib/xamarinmac20/_._",
-        "lib/xamarintvos10/_._",
-        "lib/xamarinwatchos10/_._",
-        "system.drawing.common.9.0.0.nupkg.sha512",
-        "system.drawing.common.nuspec",
-        "useSharedDesignerContext.txt"
-      ]
-    },
     "System.Memory/4.5.3": {
       "sha512": "3oDzvc/zzetpTKWMShs1AADwZjQ/36HnsufHRPcOjyRAAMLDlu2iD33MBI2opxnezcVUtXyqDXXjoFMOU9c7SA==",
       "type": "package",
@@ -563,7 +328,6 @@
   },
   "projectFileDependencyGroups": {
     "net9.0-windows7.0": [
-      "H.NotifyIcon.Wpf >= 2.2.0",
       "Microsoft.Data.Sqlite >= 9.0.3"
     ]
   },
@@ -610,10 +374,6 @@
       "net9.0-windows7.0": {
         "targetAlias": "net9.0-windows",
         "dependencies": {
-          "H.NotifyIcon.Wpf": {
-            "target": "Package",
-            "version": "[2.2.0, )"
-          },
           "Microsoft.Data.Sqlite": {
             "target": "Package",
             "version": "[9.0.3, )"
@@ -634,7 +394,7 @@
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           },
-          "Microsoft.WindowsDesktop.App.WPF": {
+          "Microsoft.WindowsDesktop.App": {
             "privateAssets": "none"
           }
         },

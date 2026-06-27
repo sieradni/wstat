@@ -1,0 +1,22 @@
+# .NET build output
+bin/
+obj/
+*.user
+*.suo
+*.sln.docstates
+
+# .NET project-specific
+*.csproj.user
+*.dbmdl
+*.jfm
+*.nupkg
+
+# IDE
+.vs/
+*.DotSettings
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+packages/
+*.log

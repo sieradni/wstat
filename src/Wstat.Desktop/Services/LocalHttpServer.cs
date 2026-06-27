@@ -1,5 +1,5 @@
 using System.IO;
-using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 
@@ -7,16 +7,23 @@ namespace Wstat.Desktop.Services;
 
 public class LocalHttpServer : IDisposable
 {
-    private readonly HttpListener _listener;
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private static readonly string LogPath = CreateLogPath();
+
+    private readonly TcpListener _listener;
     private readonly WindowTrackerService _tracker;
     private readonly CancellationTokenSource _cts = new();
+    private Task? _listenTask;
     private bool _disposed;
 
     public LocalHttpServer(WindowTrackerService tracker)
     {
         _tracker = tracker;
-        _listener = new HttpListener();
-        _listener.Prefixes.Add("http://127.0.0.1:12345/");
+        _listener = new TcpListener(System.Net.IPAddress.Loopback, 12345);
     }
 
     public void Start()
@@ -24,11 +31,12 @@ public class LocalHttpServer : IDisposable
         try
         {
             _listener.Start();
-            _ = ListenLoop(_cts.Token);
+            _listenTask = ListenLoop(_cts.Token);
+            WriteLog("Server started on 127.0.0.1:12345");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[HttpServer] Failed to start: {ex.Message}");
+            WriteLog($"FAILED to start: {ex.Message}");
         }
     }
 
@@ -38,55 +46,86 @@ public class LocalHttpServer : IDisposable
         {
             try
             {
-                var context = await _listener.GetContextAsync().WaitAsync(ct);
-                _ = HandleRequest(context);
+                var client = await _listener.AcceptTcpClientAsync(ct);
+                WriteLog($"Connection from {client.Client.RemoteEndPoint}");
+                _ = HandleClient(client, ct);
             }
             catch (OperationCanceledException)
             {
                 break;
             }
-            catch (HttpListenerException)
+            catch (ObjectDisposedException)
             {
                 break;
             }
         }
     }
 
-    private async Task HandleRequest(HttpListenerContext context)
+    private async Task HandleClient(TcpClient client, CancellationToken ct)
     {
         try
         {
-            var request = context.Request;
-            var response = context.Response;
-
-            if (request.HttpMethod == "POST" && request.Url?.AbsolutePath == "/tab")
+            using (client)
+            using (var stream = client.GetStream())
+            using (var reader = new StreamReader(stream, Encoding.UTF8))
             {
-                using var reader = new StreamReader(request.InputStream, Encoding.UTF8);
-                var body = await reader.ReadToEndAsync();
+                var requestLine = await reader.ReadLineAsync(ct);
+                WriteLog($"Request: {requestLine ?? "(empty)"}");
 
-                var payload = JsonSerializer.Deserialize<TabPayload>(body);
-                if (payload != null)
+                if (string.IsNullOrEmpty(requestLine)) return;
+
+                var contentLength = 0;
+                string? line;
+                while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(ct)))
                 {
-                    _tracker.SetBrowserTab(payload.Url ?? "", payload.Title ?? "");
-                    System.Diagnostics.Debug.WriteLine($"[HttpServer] Tab: {payload.Title} ({payload.Url})");
+                    if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int.TryParse(line.AsSpan("Content-Length:".Length), out contentLength);
+                    }
                 }
 
-                response.StatusCode = 200;
-                var buffer = Encoding.UTF8.GetBytes("{\"status\":\"ok\"}");
-                response.ContentType = "application/json";
-                response.ContentLength64 = buffer.Length;
-                await response.OutputStream.WriteAsync(buffer);
-            }
-            else
-            {
-                response.StatusCode = 404;
-            }
+                var body = "";
+                if (contentLength > 0)
+                {
+                    var buffer = new char[contentLength];
+                    var read = await reader.ReadAsync(buffer.AsMemory(0, contentLength), ct);
+                    body = new string(buffer, 0, read);
+                    WriteLog($"Body ({read} chars): {body[..Math.Min(body.Length, 200)]}");
+                }
 
-            response.OutputStream.Close();
+                var responseBody = "{\"status\":\"ok\"}";
+                var statusLine = "HTTP/1.1 200 OK\r\n";
+
+                if (requestLine.StartsWith("POST ") && requestLine.Contains("/tab"))
+                {
+                    var payload = JsonSerializer.Deserialize<TabPayload>(body, JsonOpts);
+                    if (payload != null)
+                    {
+                        WriteLog($"Calling SetBrowserTab(url={payload.Url}, title={payload.Title})");
+                        _tracker.SetBrowserTab(payload.Url ?? "", payload.Title ?? "");
+                    }
+                    else
+                    {
+                        WriteLog($"Failed to deserialize body: {body}");
+                    }
+                }
+                else
+                {
+                    statusLine = "HTTP/1.1 404 Not Found\r\n";
+                    responseBody = "{\"status\":\"not found\"}";
+                }
+
+                var responseBytes = Encoding.UTF8.GetBytes(responseBody);
+                var response = $"{statusLine}Content-Type: application/json\r\nContent-Length: {responseBytes.Length}\r\nConnection: close\r\n\r\n";
+                var headerBytes = Encoding.UTF8.GetBytes(response);
+                await stream.WriteAsync(headerBytes, ct);
+                await stream.WriteAsync(responseBytes, ct);
+                await stream.FlushAsync(ct);
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // Silently handle client disconnect errors
+            WriteLog($"HandleClient error: {ex.Message}");
         }
     }
 
@@ -102,7 +141,24 @@ public class LocalHttpServer : IDisposable
         _disposed = true;
         Stop();
         _cts.Dispose();
-        (_listener as IDisposable)?.Dispose();
+    }
+
+    private static string CreateLogPath()
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "wstat");
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, "trace.log");
+    }
+
+    private static void WriteLog(string message)
+    {
+        try
+        {
+            File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} [HttpServer] {message}\n");
+        }
+        catch { }
     }
 
     private class TabPayload

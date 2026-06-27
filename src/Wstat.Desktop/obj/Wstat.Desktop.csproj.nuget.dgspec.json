@@ -44,10 +44,6 @@
         "net9.0-windows7.0": {
           "targetAlias": "net9.0-windows",
           "dependencies": {
-            "H.NotifyIcon.Wpf": {
-              "target": "Package",
-              "version": "[2.2.0, )"
-            },
             "Microsoft.Data.Sqlite": {
               "target": "Package",
               "version": "[9.0.3, )"
@@ -68,7 +64,7 @@
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             },
-            "Microsoft.WindowsDesktop.App.WPF": {
+            "Microsoft.WindowsDesktop.App": {
               "privateAssets": "none"
             }
           },

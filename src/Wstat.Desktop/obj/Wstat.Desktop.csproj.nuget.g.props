@@ -12,7 +12,4 @@
   <ItemGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
     <SourceRoot Include="C:\Users\micha\.nuget\packages\" />
   </ItemGroup>
-  <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
-    <PkgH_NotifyIcon_Wpf Condition=" '$(PkgH_NotifyIcon_Wpf)' == '' ">C:\Users\micha\.nuget\packages\h.notifyicon.wpf\2.2.0</PkgH_NotifyIcon_Wpf>
-  </PropertyGroup>
 </Project>

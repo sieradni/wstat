@@ -1,18 +1,20 @@
 ﻿using System.Drawing;
+using System.IO;
 using System.Windows;
-using H.NotifyIcon;
 using Wstat.Desktop.Services;
 using Wstat.Desktop.ViewModels;
+using Forms = System.Windows.Forms;
 
 namespace Wstat.Desktop;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     private DatabaseService? _db;
     private WindowTrackerService? _tracker;
     private LocalHttpServer? _httpServer;
     private MainWindow? _mainWindow;
-    private TaskbarIcon? _trayIcon;
+    private Forms.NotifyIcon? _trayIcon;
+    private DashboardViewModel? _viewModel;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -25,8 +27,13 @@ public partial class App : Application
         _tracker.Start();
         _httpServer.Start();
 
-        var viewModel = new DashboardViewModel(_db);
-        _mainWindow = new MainWindow(viewModel);
+        _viewModel = new DashboardViewModel(_db);
+        _mainWindow = new MainWindow(_viewModel);
+
+        _tracker.RecordUpdated += _ =>
+        {
+            Dispatcher.Invoke(() => _viewModel?.RefreshSummary());
+        };
 
         CreateTrayIcon();
 
@@ -35,55 +42,101 @@ public partial class App : Application
 
     private void CreateTrayIcon()
     {
-        var icon = GenerateIcon();
-
-        _trayIcon = new TaskbarIcon
+        _trayIcon = new Forms.NotifyIcon
         {
-            Icon = icon,
-            ToolTipText = "wstat — Screen Time Tracker",
-            MenuActivation = H.NotifyIcon.Core.PopupActivationMode.LeftOrRightClick
+            Icon = CreateIcon(),
+            Text = "wstat \u2014 Screen Time Tracker",
+            Visible = true
         };
 
-        var showItem = new System.Windows.Controls.MenuItem
-        {
-            Header = "Show Window"
-        };
-        showItem.Click += (_, _) => ShowMainWindow();
+        var menu = new Forms.ContextMenuStrip();
+        menu.Items.Add("Show Window", null, (_, _) => ShowMainWindow());
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add("Quit", null, (_, _) => QuitApp());
 
-        var quitItem = new System.Windows.Controls.MenuItem
-        {
-            Header = "Quit"
-        };
-        quitItem.Click += (_, _) => QuitApp();
-
-        var contextMenu = new System.Windows.Controls.ContextMenu();
-        contextMenu.Items.Add(showItem);
-        contextMenu.Items.Add(quitItem);
-        _trayIcon.ContextMenu = contextMenu;
-
-        _trayIcon.TrayMouseDoubleClick += (_, _) => ShowMainWindow();
+        _trayIcon.ContextMenuStrip = menu;
+        _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
     }
 
-    private static Icon GenerateIcon()
+    private static Icon CreateIcon()
     {
-        var bitmap = new Bitmap(16, 16);
+        using var bitmap = new Bitmap(16, 16);
         using (var g = Graphics.FromImage(bitmap))
         {
-            g.Clear(Color.Transparent);
-            using var brush = new SolidBrush(Color.FromArgb(0x20, 0x78, 0xD4));
-            g.FillRectangle(brush, 0, 0, 16, 16);
-            using var font = new Font(new FontFamily("Segoe UI"), 10, System.Drawing.FontStyle.Bold);
-            g.DrawString("W", font, Brushes.White, 2, 1);
+            g.Clear(Color.FromArgb(0x20, 0x78, 0xD4));
+            using var font = new System.Drawing.Font("Segoe UI", 10, System.Drawing.FontStyle.Bold);
+            g.DrawString("W", font, Brushes.White, 3, 2);
         }
 
-        var hIcon = bitmap.GetHicon();
-        return Icon.FromHandle(hIcon);
+        using var ms = new MemoryStream();
+        WriteIco(bitmap, ms);
+        ms.Position = 0;
+        return new Icon(ms);
+    }
+
+    private static void WriteIco(Bitmap bitmap, Stream output)
+    {
+        int w = bitmap.Width, h = bitmap.Height;
+        int xorSize = w * h * 4;
+        int andRowBytes = ((w + 31) / 32) * 4;
+        int andSize = andRowBytes * h;
+        int dataSize = 40 + xorSize + andSize;
+
+        output.WriteByte(0); output.WriteByte(0);
+        output.WriteByte(1); output.WriteByte(0);
+        output.WriteByte(1); output.WriteByte(0);
+
+        output.WriteByte((byte)(w == 256 ? 0 : w));
+        output.WriteByte((byte)(h == 256 ? 0 : h));
+        output.WriteByte(0);
+        output.WriteByte(0);
+        WriteLe16(output, 1);
+        WriteLe16(output, 32);
+        WriteLe32(output, dataSize);
+        WriteLe32(output, 22);
+
+        WriteLe32(output, 40);
+        WriteLe32(output, w);
+        WriteLe32(output, h * 2);
+        WriteLe16(output, 1);
+        WriteLe16(output, 32);
+        WriteLe32(output, 0);
+        WriteLe32(output, xorSize + andSize);
+        WriteLe32(output, 0);
+        WriteLe32(output, 0);
+        WriteLe32(output, 0);
+        WriteLe32(output, 0);
+
+        for (int y = h - 1; y >= 0; y--)
+            for (int x = 0; x < w; x++)
+            {
+                var px = bitmap.GetPixel(x, y);
+                output.WriteByte(px.B);
+                output.WriteByte(px.G);
+                output.WriteByte(px.R);
+                output.WriteByte(px.A);
+            }
+
+        output.Write(new byte[andSize], 0, andSize);
+    }
+
+    private static void WriteLe16(Stream s, ushort v)
+    {
+        s.WriteByte((byte)v);
+        s.WriteByte((byte)(v >> 8));
+    }
+
+    private static void WriteLe32(Stream s, int v)
+    {
+        s.WriteByte((byte)v);
+        s.WriteByte((byte)(v >> 8));
+        s.WriteByte((byte)(v >> 16));
+        s.WriteByte((byte)(v >> 24));
     }
 
     private void ShowMainWindow()
     {
         if (_mainWindow == null) return;
-
         _mainWindow.Show();
         _mainWindow.WindowState = WindowState.Normal;
         _mainWindow.Activate();
@@ -93,7 +146,8 @@ public partial class App : Application
     {
         _tracker?.Stop();
         _httpServer?.Stop();
-        _trayIcon?.Dispose();
+        _viewModel?.Dispose();
+        if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
         _db?.Dispose();
         Current.Shutdown();
     }
@@ -102,7 +156,8 @@ public partial class App : Application
     {
         _tracker?.Stop();
         _httpServer?.Stop();
-        _trayIcon?.Dispose();
+        _viewModel?.Dispose();
+        if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
         _db?.Dispose();
         base.OnExit(e);
     }

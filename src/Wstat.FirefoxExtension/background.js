@@ -1,13 +1,16 @@
 const SERVER_URL = "http://127.0.0.1:12345/tab";
 
-let pendingTabId = null;
+function isHttpUrl(url) {
+  return url && (url.startsWith("http://") || url.startsWith("https://"));
+}
 
 function sendTabInfo(tabId) {
   browser.tabs.get(tabId).then((tab) => {
     if (browser.runtime.lastError || !tab || tab.discarded) return;
+    if (!isHttpUrl(tab.url)) return;
 
     const payload = {
-      url: tab.url || "",
+      url: tab.url,
       title: tab.title || ""
     };
 
@@ -15,10 +18,12 @@ function sendTabInfo(tabId) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
-    }).catch(() => {
-      // Desktop app unreachable — silently ignore
+    }).catch((err) => {
+      console.log("[wstat] Fetch failed:", err.message);
     });
-  }).catch(() => {});
+  }).catch((err) => {
+    console.log("[wstat] tabs.get failed:", err.message);
+  });
 }
 
 browser.tabs.onActivated.addListener((activeInfo) => {
@@ -31,7 +36,6 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// Also send when the window regains focus
 browser.windows.onFocusChanged.addListener((windowId) => {
   if (windowId === browser.windows.WINDOW_ID_NONE) return;
 
@@ -39,5 +43,7 @@ browser.windows.onFocusChanged.addListener((windowId) => {
     if (tabs && tabs.length > 0) {
       sendTabInfo(tabs[0].id);
     }
-  }).catch(() => {});
+  }).catch((err) => {
+    console.log("[wstat] windows.onFocusChanged error:", err.message);
+  });
 });

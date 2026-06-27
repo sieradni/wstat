@@ -7,7 +7,6 @@ namespace Wstat.Desktop.Services;
 public class DatabaseService : IDisposable
 {
     private readonly SqliteConnection _connection;
-    private readonly string _connectionString;
 
     public DatabaseService()
     {
@@ -18,8 +17,7 @@ public class DatabaseService : IDisposable
         Directory.CreateDirectory(dbDir);
 
         var dbPath = Path.Combine(dbDir, "wstat.db");
-        _connectionString = $"Data Source={dbPath}";
-        _connection = new SqliteConnection(_connectionString);
+        _connection = new SqliteConnection($"Data Source={dbPath}");
         _connection.Open();
         InitializeSchema();
     }
@@ -33,13 +31,26 @@ public class DatabaseService : IDisposable
                 AppName TEXT NOT NULL,
                 WindowTitle TEXT NOT NULL,
                 BrowserUrl TEXT,
+                ProcessPath TEXT,
                 StartTime TEXT NOT NULL,
                 EndTime TEXT,
                 DurationSeconds INTEGER NOT NULL DEFAULT 0
             );
-            CREATE INDEX IF NOT EXISTS IX_ActivityLog_StartTime ON ActivityLog(StartTime);
             """;
         cmd.ExecuteNonQuery();
+
+        // Add ProcessPath column if missing on existing DBs
+        try
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE ActivityLog ADD COLUMN ProcessPath TEXT;";
+            alter.ExecuteNonQuery();
+        }
+        catch { }
+
+        using var idx = _connection.CreateCommand();
+        idx.CommandText = "CREATE INDEX IF NOT EXISTS IX_ActivityLog_StartTime ON ActivityLog(StartTime);";
+        idx.ExecuteNonQuery();
     }
 
     public void InsertOrUpdateActive(ActivityRecord record)
@@ -49,13 +60,14 @@ public class DatabaseService : IDisposable
         if (record.Id == 0)
         {
             cmd.CommandText = """
-                INSERT INTO ActivityLog (AppName, WindowTitle, BrowserUrl, StartTime, EndTime, DurationSeconds)
-                VALUES ($appName, $windowTitle, $browserUrl, $startTime, NULL, 0);
+                INSERT INTO ActivityLog (AppName, WindowTitle, BrowserUrl, ProcessPath, StartTime, EndTime, DurationSeconds)
+                VALUES ($appName, $windowTitle, $browserUrl, $processPath, $startTime, NULL, 0);
                 SELECT last_insert_rowid();
                 """;
             cmd.Parameters.AddWithValue("$appName", record.AppName);
             cmd.Parameters.AddWithValue("$windowTitle", record.WindowTitle);
             cmd.Parameters.AddWithValue("$browserUrl", (object?)record.BrowserUrl ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$processPath", (object?)record.ProcessPath ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$startTime", record.StartTime.ToString("O"));
 
             var result = cmd.ExecuteScalar();
@@ -111,11 +123,15 @@ public class DatabaseService : IDisposable
 
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
-            SELECT AppName, SUM(DurationSeconds) as TotalSeconds
-            FROM ActivityLog
-            WHERE StartTime >= $start
-            AND ($end IS NULL OR StartTime < $end)
-            GROUP BY AppName
+            SELECT a.AppName,
+                   SUM(a.DurationSeconds) as TotalSeconds,
+                   (SELECT ProcessPath FROM ActivityLog
+                    WHERE AppName = a.AppName AND StartTime >= $start
+                    ORDER BY StartTime DESC LIMIT 1) as ProcessPath
+            FROM ActivityLog a
+            WHERE a.StartTime >= $start
+            AND ($end IS NULL OR a.StartTime < $end)
+            GROUP BY a.AppName
             ORDER BY TotalSeconds DESC;
             """;
         cmd.Parameters.AddWithValue("$start", start.ToString("O"));
@@ -127,7 +143,8 @@ public class DatabaseService : IDisposable
             results.Add(new AppSummary
             {
                 AppName = reader.GetString(0),
-                TotalSeconds = reader.GetInt64(1)
+                TotalSeconds = reader.GetInt64(1),
+                ProcessPath = reader.IsDBNull(2) ? null : reader.GetString(2)
             });
         }
 
@@ -141,13 +158,18 @@ public class DatabaseService : IDisposable
 
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
-            SELECT BrowserUrl, WindowTitle, COUNT(*) as VisitCount, SUM(DurationSeconds) as TotalSeconds
-            FROM ActivityLog
-            WHERE BrowserUrl IS NOT NULL
-            AND BrowserUrl != ''
-            AND StartTime >= $start
-            AND ($end IS NULL OR StartTime < $end)
-            GROUP BY BrowserUrl
+            SELECT a.BrowserUrl,
+                   (SELECT WindowTitle FROM ActivityLog
+                    WHERE BrowserUrl = a.BrowserUrl AND StartTime >= $start
+                    ORDER BY StartTime DESC LIMIT 1) as WindowTitle,
+                   COUNT(*) as VisitCount,
+                   SUM(a.DurationSeconds) as TotalSeconds
+            FROM ActivityLog a
+            WHERE a.BrowserUrl IS NOT NULL
+            AND a.BrowserUrl != ''
+            AND a.StartTime >= $start
+            AND ($end IS NULL OR a.StartTime < $end)
+            GROUP BY a.BrowserUrl
             ORDER BY TotalSeconds DESC;
             """;
         cmd.Parameters.AddWithValue("$start", start.ToString("O"));
