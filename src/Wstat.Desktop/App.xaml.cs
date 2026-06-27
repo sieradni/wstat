@@ -20,6 +20,34 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            var ex = args.ExceptionObject as Exception;
+            var logPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "wstat", "trace.log");
+            try
+            {
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:HH:mm:ss.fff} [FATAL] Unhandled: {ex?.GetType().Name}: {ex?.Message}\n{ex?.StackTrace}\n");
+            }
+            catch { }
+        };
+
+        DispatcherUnhandledException += (_, args) =>
+        {
+            var logPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "wstat", "trace.log");
+            try
+            {
+                System.IO.File.AppendAllText(logPath,
+                    $"{DateTime.Now:HH:mm:ss.fff} [FATAL] Dispatcher: {args.Exception.GetType().Name}: {args.Exception.Message}\n{args.Exception.StackTrace}\n");
+            }
+            catch { }
+            args.Handled = true;
+        };
+
         _db = new DatabaseService();
         _tracker = new WindowTrackerService(_db);
         _httpServer = new LocalHttpServer(_tracker);

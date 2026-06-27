@@ -45,3 +45,5 @@ C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\Wstat.Deskt
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\Wstat.Desktop.genruntimeconfig.cache
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\ref\Wstat.Desktop.dll
 C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\Wstat.Desktop.sourcelink.json
+C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\GeneratedInternalTypeHelper.g.cs
+C:\Users\micha\Code\wstat\src\Wstat.Desktop\obj\Debug\net9.0-windows\Wstat.Desktop_MarkupCompile.lref

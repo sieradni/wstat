@@ -21,6 +21,11 @@ public class WindowTrackerService : IDisposable
     private bool _wasIdle;
     private bool _disposed;
 
+    private string? _pendingProcessPath;
+    private string? _pendingWindowTitle;
+    private string? _pendingAppName;
+    private int _pendingCount;
+
     private string? _latestBrowserUrl;
     private string? _latestBrowserTitle;
 
@@ -127,28 +132,91 @@ public class WindowTrackerService : IDisposable
                     _wasIdle = false;
                     IdleStateChanged?.Invoke(false);
                     StartNewRecord(processPath, windowTitle ?? "", appName);
+                    _lastProcessPath = processPath;
+                    _lastWindowTitle = windowTitle ?? "";
                 }
                 return;
             }
 
             if (isIdle) return;
 
-            var hasChanged = processPath != _lastProcessPath ||
-                             (windowTitle ?? "") != _lastWindowTitle;
+            var processChanged = processPath != _lastProcessPath;
 
-            if (hasChanged)
+            if (processChanged)
             {
-                CloseCurrentRecord();
-                StartNewRecord(processPath, windowTitle ?? "", appName);
+                if (_pendingProcessPath == null)
+                {
+                    // First sighting of a new process — start debounce
+                    _pendingProcessPath = processPath;
+                    _pendingWindowTitle = windowTitle ?? "";
+                    _pendingAppName = appName;
+                    _pendingCount = 1;
+                }
+                else if (processPath == _pendingProcessPath &&
+                         _pendingCount < 2)
+                {
+                    // Still the same new process, count up
+                    _pendingCount++;
+                }
+                else if (processPath != _pendingProcessPath)
+                {
+                    // A third process appeared before debounce settled
+                    CloseCurrentRecord();
+                    _pendingProcessPath = null;
+                    _pendingCount = 0;
+                    StartNewRecord(processPath, windowTitle ?? "", appName);
+                    _lastProcessPath = processPath;
+                    _lastWindowTitle = windowTitle ?? "";
+                }
+
+                // Check if we should commit the pending switch
+                if (_pendingProcessPath != null && _pendingCount >= 2)
+                {
+                    CloseCurrentRecord();
+                    StartNewRecord(_pendingProcessPath, _pendingWindowTitle ?? "", _pendingAppName!);
+                    _lastProcessPath = _pendingProcessPath;
+                    _lastWindowTitle = _pendingWindowTitle ?? "";
+                    _pendingProcessPath = null;
+                    _pendingCount = 0;
+                }
+
+                // If pending is still active, update its window title
+                if (_pendingProcessPath != null && _currentRecord != null)
+                {
+                    _db.InsertOrUpdateActive(_currentRecord);
+                    RecordUpdated?.Invoke(_currentRecord);
+                }
             }
-            else if (_currentRecord != null)
+            else
             {
-                _db.InsertOrUpdateActive(_currentRecord);
-                RecordUpdated?.Invoke(_currentRecord);
+                // No process change
+                if (_pendingProcessPath != null)
+                {
+                    // We were about to switch but the user came back — cancel
+                    _pendingProcessPath = null;
+                    _pendingCount = 0;
+                }
+
+                if (_currentRecord != null)
+                {
+                    var titleChanged = (windowTitle ?? "") != _lastWindowTitle;
+                    if (titleChanged)
+                    {
+                        _currentRecord.WindowTitle = windowTitle ?? "";
+                        var isFirefox = appName.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase);
+                        if (isFirefox && _latestBrowserUrl != null)
+                        {
+                            _currentRecord.BrowserUrl = _latestBrowserUrl;
+                            _currentRecord.WindowTitle = _latestBrowserTitle ?? windowTitle ?? "";
+                        }
+                    }
+
+                    _db.InsertOrUpdateActive(_currentRecord);
+                    RecordUpdated?.Invoke(_currentRecord);
+                    _lastWindowTitle = windowTitle ?? "";
+                }
             }
 
-            _lastProcessPath = processPath;
-            _lastWindowTitle = windowTitle;
         }
         catch (Exception ex)
         {

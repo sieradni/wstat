@@ -78,10 +78,9 @@ public class DatabaseService : IDisposable
             var elapsed = (int)(DateTime.Now - record.StartTime).TotalSeconds;
             cmd.CommandText = """
                 UPDATE ActivityLog
-                SET EndTime = $endTime, DurationSeconds = $duration
+                SET DurationSeconds = $duration
                 WHERE Id = $id;
                 """;
-            cmd.Parameters.AddWithValue("$endTime", DateTime.Now.ToString("O"));
             cmd.Parameters.AddWithValue("$duration", elapsed);
             cmd.Parameters.AddWithValue("$id", record.Id);
             cmd.ExecuteNonQuery();
@@ -94,6 +93,8 @@ public class DatabaseService : IDisposable
 
         record.EndTime = DateTime.Now;
         record.DurationSeconds = (int)(record.EndTime.Value - record.StartTime).TotalSeconds;
+
+        if (record.DurationSeconds <= 0) return;
 
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
@@ -131,6 +132,7 @@ public class DatabaseService : IDisposable
             FROM ActivityLog a
             WHERE a.StartTime >= $start
             AND ($end IS NULL OR a.StartTime < $end)
+            AND (a.DurationSeconds > 0 OR a.EndTime IS NULL)
             GROUP BY a.AppName
             ORDER BY TotalSeconds DESC;
             """;
@@ -169,6 +171,7 @@ public class DatabaseService : IDisposable
             AND a.BrowserUrl != ''
             AND a.StartTime >= $start
             AND ($end IS NULL OR a.StartTime < $end)
+            AND (a.DurationSeconds > 0 OR a.EndTime IS NULL)
             GROUP BY a.BrowserUrl
             ORDER BY TotalSeconds DESC;
             """;
@@ -190,7 +193,44 @@ public class DatabaseService : IDisposable
         return results;
     }
 
-    private static (DateTime start, DateTime? end) GetDateRange(DateFilter filter)
+    public List<TimelineEntry> GetTimeline(DateFilter filter)
+    {
+        var (start, end) = GetDateRange(filter);
+        var results = new List<TimelineEntry>();
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT AppName, WindowTitle, StartTime,
+                   COALESCE(EndTime, $now) as EndTime,
+                   DurationSeconds, ProcessPath
+            FROM ActivityLog
+            WHERE StartTime >= $start
+            AND ($end IS NULL OR StartTime < $end)
+            AND (DurationSeconds > 0 OR EndTime IS NULL)
+            ORDER BY StartTime ASC;
+            """;
+        cmd.Parameters.AddWithValue("$start", start.ToString("O"));
+        cmd.Parameters.AddWithValue("$end", (object?)end?.ToString("O") ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$now", DateTime.Now.ToString("O"));
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            results.Add(new TimelineEntry
+            {
+                AppName = reader.GetString(0),
+                WindowTitle = reader.GetString(1),
+                StartTime = DateTime.Parse(reader.GetString(2)),
+                EndTime = DateTime.Parse(reader.GetString(3)),
+                DurationSeconds = reader.GetInt32(4),
+                ProcessPath = reader.IsDBNull(5) ? null : reader.GetString(5)
+            });
+        }
+
+        return results;
+    }
+
+    internal static (DateTime start, DateTime? end) GetDateRange(DateFilter filter)
     {
         var now = DateTime.Now;
         return filter switch
