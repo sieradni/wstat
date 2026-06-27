@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Wstat.Desktop")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+eaad922e52cbe56e32540816f7afe9ec26812968")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c45b31afea0e1cfea78dc2a03f2dd805103673f7")]
 [assembly: System.Reflection.AssemblyProductAttribute("Wstat.Desktop")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Wstat.Desktop")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
