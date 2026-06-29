@@ -108,8 +108,14 @@ public class WindowTrackerService : IDisposable
             var idleDuration = nowTick - lastInputTick;
             var isIdle = idleDuration > IdleThresholdMs;
 
-            if (hWnd == IntPtr.Zero || string.IsNullOrEmpty(processPath))
+            if (hWnd == IntPtr.Zero)
             {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(processPath))
+            {
+                CloseCurrentRecord();
                 return;
             }
 

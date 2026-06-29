@@ -29,6 +29,9 @@ internal static class Win32Api
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool CloseHandle(IntPtr hObject);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int GetWindowModuleFileName(IntPtr hWnd, StringBuilder lpFileName, int nMaxCount);
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
@@ -59,18 +62,25 @@ internal static class Win32Api
         if (pid == 0) return null;
 
         var hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-        if (hProcess == IntPtr.Zero) return null;
+        if (hProcess != IntPtr.Zero)
+        {
+            try
+            {
+                var sb = new StringBuilder(260);
+                var size = (uint)sb.Capacity;
+                if (QueryFullProcessImageName(hProcess, 0, sb, ref size))
+                    return sb.ToString();
+            }
+            finally
+            {
+                CloseHandle(hProcess);
+            }
+        }
 
-        try
-        {
-            var sb = new StringBuilder(260);
-            var size = (uint)sb.Capacity;
-            return QueryFullProcessImageName(hProcess, 0, sb, ref size) ? sb.ToString() : null;
-        }
-        finally
-        {
-            CloseHandle(hProcess);
-        }
+        var sbFallback = new StringBuilder(260);
+        return GetWindowModuleFileName(hWnd, sbFallback, sbFallback.Capacity) > 0
+            ? sbFallback.ToString()
+            : null;
     }
 
     public static uint GetLastInputTick()
