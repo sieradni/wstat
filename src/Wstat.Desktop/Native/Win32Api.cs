@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -6,6 +5,8 @@ namespace Wstat.Desktop.Native;
 
 internal static class Win32Api
 {
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr GetForegroundWindow();
 
@@ -20,6 +21,13 @@ internal static class Win32Api
     public static extern bool QueryFullProcessImageName(
         IntPtr hProcess, uint dwFlags,
         StringBuilder lpExeName, ref uint lpdwSize);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool CloseHandle(IntPtr hObject);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -50,14 +58,19 @@ internal static class Win32Api
         GetWindowThreadProcessId(hWnd, out var pid);
         if (pid == 0) return null;
 
-        var hProcess = Process.GetProcessById((int)pid).Handle;
-        var sb = new StringBuilder(260);
-        var size = (uint)sb.Capacity;
+        var hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (hProcess == IntPtr.Zero) return null;
 
-        if (QueryFullProcessImageName(hProcess, 0, sb, ref size))
-            return sb.ToString();
-
-        return null;
+        try
+        {
+            var sb = new StringBuilder(260);
+            var size = (uint)sb.Capacity;
+            return QueryFullProcessImageName(hProcess, 0, sb, ref size) ? sb.ToString() : null;
+        }
+        finally
+        {
+            CloseHandle(hProcess);
+        }
     }
 
     public static uint GetLastInputTick()

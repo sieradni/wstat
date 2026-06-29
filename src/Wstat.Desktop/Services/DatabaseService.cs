@@ -92,9 +92,7 @@ public class DatabaseService : IDisposable
         if (record.Id == 0) return;
 
         record.EndTime = DateTime.Now;
-        record.DurationSeconds = (int)(record.EndTime.Value - record.StartTime).TotalSeconds;
-
-        if (record.DurationSeconds <= 0) return;
+        record.DurationSeconds = Math.Max(0, (int)(record.EndTime.Value - record.StartTime).TotalSeconds);
 
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """

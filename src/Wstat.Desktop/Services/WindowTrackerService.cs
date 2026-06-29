@@ -110,11 +110,6 @@ public class WindowTrackerService : IDisposable
 
             if (hWnd == IntPtr.Zero || string.IsNullOrEmpty(processPath))
             {
-                if (_currentRecord != null)
-                {
-                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} ZERO-HWND close={_currentRecord.AppName}\n");
-                    CloseCurrentRecord();
-                }
                 return;
             }
 
