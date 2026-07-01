@@ -2,10 +2,13 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using MediaColor = System.Windows.Media.Color;
+using Wstat.Desktop.Common;
 using Wstat.Desktop.Models;
 using Wstat.Desktop.Services;
 
@@ -18,6 +21,7 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     private readonly DatabaseService _db;
     private readonly DispatcherTimer _refreshTimer;
     private DateFilter _selectedFilter = DateFilter.Today;
+    private DateTime _specificDate = DateTime.Now.AddDays(-1);
     private bool _disposed;
 
     public ObservableCollection<AppSummary> Applications { get; } = new();
@@ -37,7 +41,22 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
                 OnPropertyChanged(nameof(IsYesterdaySelected));
                 OnPropertyChanged(nameof(IsLast7DaysSelected));
                 OnPropertyChanged(nameof(IsLast30DaysSelected));
+                OnPropertyChanged(nameof(IsSpecificSelected));
+                OnPropertyChanged(nameof(IsNotSpecificSelected));
                 LoadAll();
+            }
+        }
+    }
+
+    public DateTime SpecificDate
+    {
+        get => _specificDate;
+        set
+        {
+            if (_specificDate != value)
+            {
+                _specificDate = value;
+                OnPropertyChanged();
             }
         }
     }
@@ -46,13 +65,20 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     public bool IsYesterdaySelected => _selectedFilter == DateFilter.Yesterday;
     public bool IsLast7DaysSelected => _selectedFilter == DateFilter.Last7Days;
     public bool IsLast30DaysSelected => _selectedFilter == DateFilter.Last30Days;
+    public bool IsSpecificSelected => _selectedFilter == DateFilter.Specific;
+    public bool IsNotSpecificSelected => _selectedFilter != DateFilter.Specific;
 
     public RelayCommand FilterTodayCommand { get; }
     public RelayCommand FilterYesterdayCommand { get; }
     public RelayCommand FilterLast7DaysCommand { get; }
     public RelayCommand FilterLast30DaysCommand { get; }
+    public RelayCommand FilterSpecificCommand { get; }
+    public RelayCommand ClearDayCommand { get; }
+    public RelayCommand ClearProblematicCommand { get; }
+    public RelayCommand ExportCsvCommand { get; }
 
     public event Action? TimelineUpdated;
+    public event Action? ApplicationsUpdated;
 
     public DashboardViewModel(DatabaseService db)
     {
@@ -62,6 +88,10 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         FilterYesterdayCommand = new RelayCommand(() => SelectedFilter = DateFilter.Yesterday);
         FilterLast7DaysCommand = new RelayCommand(() => SelectedFilter = DateFilter.Last7Days);
         FilterLast30DaysCommand = new RelayCommand(() => SelectedFilter = DateFilter.Last30Days);
+        FilterSpecificCommand = new RelayCommand(() => SelectedFilter = DateFilter.Specific);
+        ClearDayCommand = new RelayCommand(ClearDay);
+        ClearProblematicCommand = new RelayCommand(ClearProblematic);
+        ExportCsvCommand = new RelayCommand(ExportCsv);
 
         BindingOperations.EnableCollectionSynchronization(Applications, new object());
         BindingOperations.EnableCollectionSynchronization(TopUrls, new object());
@@ -84,24 +114,27 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     {
         LoadApps();
         LoadUrls();
-        if (_selectedFilter == DateFilter.Today)
+        if (_selectedFilter is DateFilter.Today or DateFilter.Specific)
             LoadTimeline();
     }
 
+    private DateTime? SpecificDateOrNull => _selectedFilter == DateFilter.Specific ? _specificDate : null;
+
     private void LoadApps()
     {
-        var apps = _db.GetAppSummary(_selectedFilter);
+        var apps = _db.GetAppSummary(_selectedFilter, SpecificDateOrNull);
         Applications.Clear();
         foreach (var app in apps)
         {
             app.Icon = GetOrLoadIcon(app.ProcessPath);
             Applications.Add(app);
         }
+        ApplicationsUpdated?.Invoke();
     }
 
     private void LoadUrls()
     {
-        var urls = _db.GetUrlSummary(_selectedFilter);
+        var urls = _db.GetUrlSummary(_selectedFilter, SpecificDateOrNull);
         TopUrls.Clear();
         foreach (var url in urls)
             TopUrls.Add(url);
@@ -109,7 +142,7 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
 
     private void LoadTimeline()
     {
-        var raw = _db.GetTimeline(_selectedFilter);
+        var raw = _db.GetTimeline(_selectedFilter, SpecificDateOrNull);
         var colorIndex = new Dictionary<string, MediaColor>(StringComparer.OrdinalIgnoreCase);
         var paletteIdx = 0;
 
@@ -192,6 +225,86 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         MediaColor.FromRgb(0x00, 0x76, 0xD4),
         MediaColor.FromRgb(0x6D, 0x4C, 0x41),
     ];
+
+    private void ClearDay()
+    {
+        if (_selectedFilter != DateFilter.Specific) return;
+
+        var result = System.Windows.MessageBox.Show(
+            $"Delete ALL activity records for {_specificDate:yyyy-MM-dd}?\nThis cannot be undone.",
+            "Clear Day",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.Yes) return;
+
+        var count = _db.DeleteRecordsForDay(_specificDate);
+        LogWriter.Write($"[Clear] Deleted {count} records for {_specificDate:yyyy-MM-dd}");
+        LoadAll();
+    }
+
+    private void ClearProblematic()
+    {
+        if (_selectedFilter != DateFilter.Specific) return;
+
+        var result = System.Windows.MessageBox.Show(
+            $"Delete problematic records (DurationSeconds <= 0 or orphaned) for {_specificDate:yyyy-MM-dd}?",
+            "Clear Problematic Records",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.Yes) return;
+
+        var count = _db.DeleteProblematicRecordsForDay(_specificDate);
+        LogWriter.Write($"[Clear] Deleted {count} problematic records for {_specificDate:yyyy-MM-dd}");
+        LoadAll();
+    }
+
+    private void ExportCsv()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
+            DefaultExt = ".csv",
+            FileName = $"wstat-export-{DateTime.Now:yyyy-MM-dd}.csv"
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Type,Name,TimeSeconds,DisplayTime,Details");
+
+            foreach (var app in Applications)
+            {
+                var name = CsvEscape(app.AppName);
+                sb.AppendLine($"App,{name},{app.TotalSeconds},{app.DisplayTime},");
+            }
+
+            foreach (var url in TopUrls)
+            {
+                var urlVal = CsvEscape(url.Url);
+                var titleVal = CsvEscape(url.Title);
+                sb.AppendLine($"Url,{urlVal},{url.TotalSeconds},{url.DisplayTime},{titleVal}");
+            }
+
+            File.WriteAllText(dialog.FileName, sb.ToString());
+            LogWriter.Write("[Export] Saved CSV to " + dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            LogWriter.Write("[Export] Error: " + ex.Message);
+        }
+    }
+
+    private static string CsvEscape(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        return value;
+    }
 
     public void Dispose()
     {

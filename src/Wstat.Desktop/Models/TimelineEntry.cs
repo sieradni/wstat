@@ -12,5 +12,4 @@ public class TimelineEntry
     public int DurationSeconds { get; set; }
     public MediaColor AppColor { get; set; }
     public MediaColor TitleColor { get; set; }
-    public int RowIndex { get; set; }
 }

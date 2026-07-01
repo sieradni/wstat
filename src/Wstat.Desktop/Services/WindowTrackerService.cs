@@ -30,6 +30,7 @@ public class WindowTrackerService : IDisposable
 
     private string? _latestBrowserUrl;
     private string? _latestBrowserTitle;
+    private uint _lastTick;
 
     public event Action<ActivityRecord>? RecordUpdated;
     public event Action<bool>? IdleStateChanged;
@@ -108,6 +109,20 @@ public class WindowTrackerService : IDisposable
             var isIdle = idleDuration > IdleThresholdMs;
 
             if (hWnd == IntPtr.Zero) return;
+
+            if (_lastTick != 0)
+            {
+                var elapsed = nowTick - _lastTick;
+                if (elapsed > PollIntervalMs * 10)
+                {
+                    lock (_stateLock)
+                    {
+                        CloseCurrentRecord();
+                        LogWriter.Write("[WindowTracker] GAP detected: " + elapsed + "ms since last tick (sleep/resume/DST)");
+                    }
+                }
+            }
+            _lastTick = nowTick;
 
             if (string.IsNullOrEmpty(processPath))
             {

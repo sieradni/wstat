@@ -140,6 +140,53 @@ public class DatabaseService : IDisposable
         }
     }
 
+    public int DeleteRecordsForDay(DateTime day)
+    {
+        var start = day.Date;
+        var end = start.AddDays(1);
+
+        _writeLock.Wait();
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                DELETE FROM ActivityLog
+                WHERE StartTime >= $start AND StartTime < $end;
+                """;
+            cmd.Parameters.AddWithValue("$start", start.ToString("O"));
+            cmd.Parameters.AddWithValue("$end", end.ToString("O"));
+            return cmd.ExecuteNonQuery();
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    public int DeleteProblematicRecordsForDay(DateTime day)
+    {
+        var start = day.Date;
+        var end = start.AddDays(1);
+
+        _writeLock.Wait();
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                DELETE FROM ActivityLog
+                WHERE StartTime >= $start AND StartTime < $end
+                AND (DurationSeconds <= 0 OR EndTime IS NULL);
+                """;
+            cmd.Parameters.AddWithValue("$start", start.ToString("O"));
+            cmd.Parameters.AddWithValue("$end", end.ToString("O"));
+            return cmd.ExecuteNonQuery();
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
     public void UpdateBrowserUrl(int recordId, string url)
     {
         _writeLock.Wait();
@@ -157,9 +204,9 @@ public class DatabaseService : IDisposable
         }
     }
 
-    public List<AppSummary> GetAppSummary(DateFilter filter)
+    public List<AppSummary> GetAppSummary(DateFilter filter, DateTime? specificDate = null)
     {
-        var (start, end) = GetDateRange(filter);
+        var (start, end) = GetDateRange(filter, specificDate);
         var results = new List<AppSummary>();
 
         _writeLock.Wait();
@@ -201,9 +248,9 @@ public class DatabaseService : IDisposable
         return results;
     }
 
-    public List<UrlSummary> GetUrlSummary(DateFilter filter)
+    public List<UrlSummary> GetUrlSummary(DateFilter filter, DateTime? specificDate = null)
     {
-        var (start, end) = GetDateRange(filter);
+        var (start, end) = GetDateRange(filter, specificDate);
         var results = new List<UrlSummary>();
 
         _writeLock.Wait();
@@ -249,9 +296,9 @@ public class DatabaseService : IDisposable
         return results;
     }
 
-    public List<TimelineEntry> GetTimeline(DateFilter filter)
+    public List<TimelineEntry> GetTimeline(DateFilter filter, DateTime? specificDate = null)
     {
-        var (start, end) = GetDateRange(filter);
+        var (start, end) = GetDateRange(filter, specificDate);
         var results = new List<TimelineEntry>();
 
         _writeLock.Wait();
@@ -294,7 +341,7 @@ public class DatabaseService : IDisposable
         return results;
     }
 
-    internal static (DateTime start, DateTime? end) GetDateRange(DateFilter filter)
+    internal static (DateTime start, DateTime? end) GetDateRange(DateFilter filter, DateTime? specificDate = null)
     {
         var now = DateTime.Now;
         return filter switch
@@ -303,6 +350,9 @@ public class DatabaseService : IDisposable
             DateFilter.Yesterday => (now.Date.AddDays(-1), now.Date),
             DateFilter.Last7Days => (now.Date.AddDays(-6), now.Date.AddDays(1)),
             DateFilter.Last30Days => (now.Date.AddDays(-29), now.Date.AddDays(1)),
+            DateFilter.Specific => specificDate.HasValue
+                ? (specificDate.Value.Date, specificDate.Value.Date.AddDays(1))
+                : (now.Date, null),
             _ => (now.Date, null)
         };
     }
@@ -320,5 +370,6 @@ public enum DateFilter
     Today,
     Yesterday,
     Last7Days,
-    Last30Days
+    Last30Days,
+    Specific
 }

@@ -15,4 +15,5 @@ internal static class AppPaths
 
     public static string DbPath => Path.Combine(BaseDir, "wstat.db");
     public static string LogPath => Path.Combine(BaseDir, "trace.log");
+    public static string IconPath => Path.Combine(BaseDir, "app.ico");
 }

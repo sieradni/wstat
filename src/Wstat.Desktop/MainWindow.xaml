@@ -7,10 +7,46 @@
         MinWidth="600" MinHeight="400"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
-        <Style TargetType="Button" x:Key="FilterButton">
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <Style TargetType="Button" x:Key="FilterButtonBase">
             <Setter Property="Padding" Value="10,4"/>
             <Setter Property="Margin" Value="2"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#333333"/>
+        </Style>
+        <Style TargetType="Button" x:Key="TodayButton" BasedOn="{StaticResource FilterButtonBase}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsTodaySelected}" Value="True">
+                    <Setter Property="Background" Value="#4285F4"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="Button" x:Key="YesterdayButton" BasedOn="{StaticResource FilterButtonBase}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsYesterdaySelected}" Value="True">
+                    <Setter Property="Background" Value="#4285F4"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="Button" x:Key="Last7Button" BasedOn="{StaticResource FilterButtonBase}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsLast7DaysSelected}" Value="True">
+                    <Setter Property="Background" Value="#4285F4"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="Button" x:Key="Last30Button" BasedOn="{StaticResource FilterButtonBase}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsLast30DaysSelected}" Value="True">
+                    <Setter Property="Background" Value="#4285F4"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
         <Style TargetType="DataGrid">
             <Setter Property="AutoGenerateColumns" Value="False"/>
@@ -35,34 +71,38 @@
                    Margin="0,0,0,8"/>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-            <Button Content="Today" Style="{StaticResource FilterButton}"
+            <Button Content="Today" Style="{StaticResource TodayButton}"
                     Command="{Binding FilterTodayCommand}"/>
-            <Button Content="Yesterday" Style="{StaticResource FilterButton}"
+            <Button Content="Yesterday" Style="{StaticResource YesterdayButton}"
                     Command="{Binding FilterYesterdayCommand}"/>
-            <Button Content="Last 7 Days" Style="{StaticResource FilterButton}"
+            <Button Content="Last 7 Days" Style="{StaticResource Last7Button}"
                     Command="{Binding FilterLast7DaysCommand}"/>
-            <Button Content="Last 30 Days" Style="{StaticResource FilterButton}"
+            <Button Content="Last 30 Days" Style="{StaticResource Last30Button}"
                     Command="{Binding FilterLast30DaysCommand}"/>
+            <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,2"/>
+            <Button Content="Export CSV" Padding="10,4" Margin="2" Cursor="Hand"
+                    Command="{Binding ExportCsvCommand}"/>
+            <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,2"/>
+            <DatePicker SelectedDate="{Binding SpecificDate, Mode=TwoWay}"
+                        Width="120" Margin="2" Height="24"
+                        VerticalAlignment="Center"/>
+            <Button Content="View" Padding="10,4" Margin="2" Cursor="Hand"
+                    Command="{Binding FilterSpecificCommand}"/>
+            <Button Content="Clear All" Padding="10,4" Margin="2" Cursor="Hand"
+                    Command="{Binding ClearDayCommand}"
+                    Visibility="{Binding IsSpecificSelected, Converter={StaticResource BoolToVis}}"
+                    Background="#E53935" Foreground="White"/>
+            <Button Content="Clear Bad" Padding="10,4" Margin="2" Cursor="Hand"
+                    Command="{Binding ClearProblematicCommand}"
+                    Visibility="{Binding IsSpecificSelected, Converter={StaticResource BoolToVis}}"
+                    Background="#FB8C00" Foreground="White"/>
         </StackPanel>
 
         <TabControl Grid.Row="2" SelectionChanged="TabControl_SelectionChanged">
             <TabItem Header="Applications">
-                <Grid>
-                    <DataGrid ItemsSource="{Binding Applications}">
-                        <DataGrid.Columns>
-                            <DataGridTemplateColumn Header="" Width="30">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Image Source="{Binding Icon}" Width="16" Height="16"
-                                               Margin="2,0,0,0" Stretch="Uniform"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Application" Binding="{Binding AppName}" Width="*"/>
-                            <DataGridTextColumn Header="Time Spent" Binding="{Binding DisplayTime}" Width="150"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <views:AppsBarControl x:Name="appsBarControl" Background="Transparent" />
+                </ScrollViewer>
             </TabItem>
             <TabItem Header="Websites">
                 <Grid>
@@ -102,7 +142,7 @@
                         <Border Background="#F0FFFFF0" BorderBrush="#666666" BorderThickness="1"
                                 Padding="8,5" CornerRadius="4" MaxWidth="400">
                             <TextBlock x:Name="timelinePopupText" FontSize="12"
-                                       TextWrapping="NoWrap" />
+                                       TextWrapping="Wrap" />
                         </Border>
                     </Popup>
                 </Grid>

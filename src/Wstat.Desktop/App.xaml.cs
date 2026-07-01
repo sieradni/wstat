@@ -78,12 +78,15 @@ public partial class App : System.Windows.Application
 
     private void CreateTrayIcon()
     {
+        var icon = CreateAndSaveIcon();
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = CreateIcon(),
+            Icon = icon,
             Text = "wstat \u2014 Screen Time Tracker",
             Visible = true
         };
+
+        _mainWindow!.Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri(AppPaths.IconPath));
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Show Window", null, (_, _) => ShowMainWindow());
@@ -94,7 +97,7 @@ public partial class App : System.Windows.Application
         _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
     }
 
-    private static Icon CreateIcon()
+    private static Icon CreateAndSaveIcon()
     {
         using var bitmap = new Bitmap(16, 16);
         using (var g = Graphics.FromImage(bitmap))
@@ -107,7 +110,15 @@ public partial class App : System.Windows.Application
         using var ms = new MemoryStream();
         WriteIco(bitmap, ms);
         ms.Position = 0;
-        return new Icon(ms);
+        var icon = new Icon(ms);
+
+        using (var fs = new FileStream(AppPaths.IconPath, FileMode.Create, FileAccess.Write))
+        {
+            ms.Position = 0;
+            ms.CopyTo(fs);
+        }
+
+        return icon;
     }
 
     private static void WriteIco(Bitmap bitmap, Stream output)
@@ -180,12 +191,9 @@ public partial class App : System.Windows.Application
 
     private void QuitApp()
     {
+        if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
         _tracker?.Stop();
         _httpServer?.Stop();
-        _viewModel?.Dispose();
-        if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
-        _db?.Dispose();
-        LogWriter.Shutdown();
         Current.Shutdown();
     }
 

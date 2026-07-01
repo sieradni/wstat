@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -17,6 +18,8 @@ public class TimelineControl : Canvas
 
     private static readonly Typeface _typeface = new("Segoe UI");
     private static readonly MediaPen _markerPen;
+    private static readonly MediaPen _minorPen;
+    private static readonly MediaPen _daySepPen;
     private static readonly MediaPen _nowLinePen;
     private static readonly MediaBrush _textBrush;
     private static readonly MediaBrush _zebraBrush;
@@ -25,6 +28,12 @@ public class TimelineControl : Canvas
     {
         _markerPen = new MediaPen(BrushCache.Get(MediaColor.FromRgb(0xDD, 0xDD, 0xDD)), 0.5);
         _markerPen.Freeze();
+
+        _minorPen = new MediaPen(BrushCache.Get(MediaColor.FromRgb(0xEE, 0xEE, 0xEE)), 0.5);
+        _minorPen.Freeze();
+
+        _daySepPen = new MediaPen(BrushCache.Get(MediaColor.FromRgb(0xBB, 0xBB, 0xBB)), 1);
+        _daySepPen.Freeze();
 
         _nowLinePen = new MediaPen(BrushCache.Get(MediaColor.FromArgb(0xCC, 0xE5, 0x39, 0x35)), 1.5);
         _nowLinePen.Freeze();
@@ -36,7 +45,8 @@ public class TimelineControl : Canvas
     private List<Models.TimelineEntry> _entries = [];
     private List<IGrouping<string, Models.TimelineEntry>> _groups = [];
     private double _hourWidth = 60;
-    private DateTime? _firstDate;
+    private DateTime _overallStart;
+    private double _totalHours = 24;
     private List<(Rect Bounds, Models.TimelineEntry Entry)> _entryRects = [];
 
     public Models.TimelineEntry? GetEntryAt(System.Windows.Point pos)
@@ -75,7 +85,19 @@ public class TimelineControl : Canvas
     {
         _entries = entries;
         _groups = entries.GroupBy(e => e.AppName).ToList();
-        _firstDate = entries.Count > 0 ? entries.Min(e => e.StartTime.Date) : null;
+
+        if (entries.Count > 0)
+        {
+            _overallStart = entries.Min(e => e.StartTime);
+            var endMax = entries.Max(e => e.EndTime);
+            _totalHours = Math.Max((endMax - _overallStart).TotalHours, 24);
+        }
+        else
+        {
+            _overallStart = DateTime.Today;
+            _totalHours = 24;
+        }
+
         ToolTip = null;
         InvalidateVisual();
         InvalidateMeasure();
@@ -84,7 +106,7 @@ public class TimelineControl : Canvas
     protected override WinSize MeasureOverride(WinSize constraint)
     {
         var count = _groups.Count;
-        var desiredW = 24 * _hourWidth + 16;
+        var desiredW = _totalHours * _hourWidth + 16;
         var w = double.IsInfinity(constraint.Width) ? desiredW : Math.Max(constraint.Width, desiredW);
         var h = TopMargin + count * RowHeight + 8;
         return new WinSize(w, h);
@@ -100,23 +122,23 @@ public class TimelineControl : Canvas
         }
         catch (Exception ex)
         {
-            var logPath = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "wstat", "trace.log");
-            try { System.IO.File.AppendAllText(logPath, $"{DateTime.Now:HH:mm:ss.fff} [TimelineControl] ERROR: {ex}\n"); }
-            catch { }
+            LogWriter.Write("[TimelineControl] ERROR: " + ex);
         }
     }
 
     private void RenderCore(DrawingContext dc)
     {
-        var timeWidth = Math.Max(ActualWidth, 24 * _hourWidth);
-        var hourPx = timeWidth / 24.0;
+        var totalHoursNum = Math.Max(_totalHours, 24);
+        var timeWidth = Math.Max(ActualWidth, totalHoursNum * _hourWidth);
+        var hourPx = timeWidth / totalHoursNum;
 
         if (hourPx <= 0) return;
 
+        var labelCache = new Dictionary<string, FormattedText>();
+
         DrawBackground(dc, _groups.Count);
-        DrawHourMarkers(dc, hourPx);
+        DrawDaySeparators(dc, hourPx, totalHoursNum, labelCache);
+        DrawHourMarkers(dc, hourPx, totalHoursNum, labelCache);
         DrawNowLine(dc, hourPx);
 
         _entryRects.Clear();
@@ -128,31 +150,25 @@ public class TimelineControl : Canvas
 
             foreach (var entry in group)
             {
-                var spanStart = entry.StartTime.TimeOfDay;
-                var spanEnd = entry.EndTime.TimeOfDay;
+                var startOff = (entry.StartTime - _overallStart).TotalHours;
+                var endOff = (entry.EndTime - _overallStart).TotalHours;
 
-                if (spanEnd == TimeSpan.Zero && entry.EndTime.Date > entry.StartTime.Date)
-                    spanEnd = TimeSpan.FromHours(24);
+                if (endOff < 0 || startOff > totalHoursNum) continue;
 
-                var left = spanStart.TotalHours * hourPx;
-                var width = Math.Max((spanEnd - spanStart).TotalHours * hourPx, 2);
+                if (startOff < 0) startOff = 0;
+                if (endOff > totalHoursNum) endOff = totalHoursNum;
 
-                if (left + width > 0)
-                {
-                    if (left < 0)
-                    {
-                        width -= -left;
-                        left = 0;
-                    }
+                var left = startOff * hourPx;
+                var width = Math.Max((endOff - startOff) * hourPx, 2);
 
-                    if (width > 0)
-                    {
-                        var barRect = new System.Windows.Rect(left, barY, width, BarHeight);
-                        dc.DrawRectangle(BrushCache.Get(entry.TitleColor), null, barRect);
-                        _entryRects.Add((barRect, entry));
-                        DrawWindowTitle(dc, entry, left, barY, width);
-                    }
-                }
+                if (width <= 0) continue;
+
+                var barRect = new System.Windows.Rect(left, barY, width, BarHeight);
+                dc.DrawRectangle(BrushCache.Get(entry.TitleColor), null, barRect);
+                _entryRects.Add((barRect, entry));
+
+                if (width > 20)
+                    DrawWindowTitle(dc, entry, left, barY, width);
             }
 
             row++;
@@ -172,41 +188,131 @@ public class TimelineControl : Canvas
         }
     }
 
-    private void DrawHourMarkers(DrawingContext dc, double hourPx)
+    private void DrawDaySeparators(DrawingContext dc, double hourPx, double totalHoursNum, Dictionary<string, FormattedText> cache)
+    {
+        if (_totalHours <= 24) return;
+
+        var firstMidnight = (_overallStart.Date.AddDays(1) - _overallStart).TotalHours;
+        if (firstMidnight <= 0 || firstMidnight >= _totalHours) return;
+
+        var bottom = ActualHeight > 0 ? ActualHeight : TopMargin + 8;
+        var dayIndex = 1;
+
+        for (var h = firstMidnight; h < _totalHours; h += 24)
+        {
+            var x = h * hourPx;
+            dc.DrawLine(_daySepPen, new System.Windows.Point(x, TopMargin - 4), new System.Windows.Point(x, bottom));
+
+            var dayDate = _overallStart.Date.AddDays(dayIndex);
+            var key = "_day_" + dayDate.ToString("yyyyMMdd");
+            if (!cache.TryGetValue(key, out var ft))
+            {
+                var label = dayDate.ToString("ddd M/d");
+                ft = new FormattedText(label, CultureInfo.CurrentCulture,
+                    System.Windows.FlowDirection.LeftToRight, _typeface, 9, _textBrush, 1.25);
+                cache[key] = ft;
+            }
+            dc.DrawText(ft, new System.Windows.Point(x + 3, TopMargin - 16));
+
+            dayIndex++;
+        }
+    }
+
+    private void DrawHourMarkers(DrawingContext dc, double hourPx, double totalHoursNum, Dictionary<string, FormattedText> cache)
     {
         var bottom = ActualHeight > 0 ? ActualHeight : TopMargin + 8;
 
-        for (int h = 0; h <= 24; h++)
-        {
-            if (h > 0 && h < 24 && h % 2 != 0) continue;
+        double majorInterval;
+        double minorInterval;
 
-            var x = h * hourPx;
+        if (hourPx > 80)
+        {
+            majorInterval = 1;
+            minorInterval = _totalHours > 48 ? 0 : 0.25;
+        }
+        else if (hourPx > 40)
+        {
+            majorInterval = 2;
+            minorInterval = _totalHours > 48 ? 0 : 0.5;
+        }
+        else if (hourPx > 20)
+        {
+            majorInterval = 2;
+            minorInterval = _totalHours > 48 ? 0 : 1;
+        }
+        else
+        {
+            majorInterval = 2;
+            minorInterval = 0;
+        }
+
+        if (minorInterval > 0)
+        {
+            for (double m = 0; m <= totalHoursNum; m += minorInterval)
+            {
+                var mRounded = Math.Round(m / minorInterval) * minorInterval;
+                if (Math.Abs(mRounded % majorInterval) < 0.01) continue;
+
+                var mx = mRounded * hourPx;
+                dc.DrawLine(_minorPen, new System.Windows.Point(mx, TopMargin - 4), new System.Windows.Point(mx, bottom));
+            }
+        }
+
+        for (double h = 0; h <= totalHoursNum; h += majorInterval)
+        {
+            var hRounded = Math.Round(h / majorInterval) * majorInterval;
+            var x = hRounded * hourPx;
             dc.DrawLine(_markerPen, new System.Windows.Point(x, TopMargin - 4), new System.Windows.Point(x, bottom));
 
-            if (h <= 24)
+            var totalHoursInt = (int)Math.Round(hRounded);
+
+            string key;
+            if (totalHoursNum > 24 && totalHoursInt % 24 == 0)
             {
-                var label = h == 24 ? "24:00" : $"{h:D2}:00";
-                var ft = new FormattedText(label, System.Globalization.CultureInfo.CurrentCulture,
-                    System.Windows.FlowDirection.LeftToRight, _typeface, 10, _textBrush, 1.25);
-                dc.DrawText(ft, new System.Windows.Point(x - ft.Width / 2, 4));
+                var dayDate = _overallStart.Date.AddDays(totalHoursInt / 24);
+                key = "_daylabel_" + dayDate.ToString("yyyyMMdd");
             }
+            else
+            {
+                key = "_hour_" + (totalHoursInt % 24);
+            }
+
+            if (!cache.TryGetValue(key, out var ft))
+            {
+                string label;
+                if (totalHoursNum > 24 && totalHoursInt % 24 == 0)
+                {
+                    var dayDate = _overallStart.Date.AddDays(totalHoursInt / 24);
+                    label = dayDate.ToString("ddd M/d");
+                }
+                else
+                {
+                    var hh = totalHoursInt % 24;
+                    label = $"{hh:D2}:00";
+                }
+
+                ft = new FormattedText(label, CultureInfo.CurrentCulture,
+                    System.Windows.FlowDirection.LeftToRight, _typeface, 10, _textBrush, 1.25);
+                cache[key] = ft;
+            }
+
+            dc.DrawText(ft, new System.Windows.Point(x - ft.Width / 2, 4));
         }
     }
 
     private void DrawNowLine(DrawingContext dc, double hourPx)
     {
         var now = DateTime.Now;
-        var todayStart = now.Date;
+        if (now < _overallStart || now > _overallStart + TimeSpan.FromHours(_totalHours)) return;
 
-        if (!_firstDate.HasValue || _firstDate.Value != todayStart) return;
+        var x = (now - _overallStart).TotalHours * hourPx;
+        if (x < 0) return;
 
-        var x = (now - todayStart).TotalHours * hourPx;
+        var totalHoursNum = Math.Max(_totalHours, 24);
+        if (x > totalHoursNum * hourPx) return;
 
-        if (x >= 0 && x <= 24 * hourPx)
-        {
-            var bottom = ActualHeight > 0 ? ActualHeight : TopMargin + 8;
-            dc.DrawLine(_nowLinePen, new System.Windows.Point(x, TopMargin - 4), new System.Windows.Point(x, bottom));
-        }
+        var bottom = ActualHeight > 0 ? ActualHeight : TopMargin + 8;
+        dc.DrawLine(_nowLinePen, new System.Windows.Point(x, TopMargin - 4), new System.Windows.Point(x, bottom));
     }
 
     private static void DrawWindowTitle(DrawingContext dc, Models.TimelineEntry entry, double left, double barY, double barWidth)

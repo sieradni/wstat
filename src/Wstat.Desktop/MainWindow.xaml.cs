@@ -21,7 +21,9 @@ public partial class MainWindow : Window
         DataContext = viewModel;
 
         _viewModel.TimelineUpdated += OnTimelineUpdated;
+        _viewModel.ApplicationsUpdated += OnApplicationsUpdated;
         OnTimelineUpdated();
+        OnApplicationsUpdated();
 
         PreviewMouseMove += Window_PreviewMouseMove;
         Deactivated += (_, _) => timelinePopup.IsOpen = false;
@@ -51,6 +53,11 @@ public partial class MainWindow : Window
         var entries = _viewModel.TimelineEntries;
         timelineControl.Render(entries);
         timelineLabels.Render(entries);
+    }
+
+    private void OnApplicationsUpdated()
+    {
+        appsBarControl.Render([.. _viewModel.Applications]);
     }
 
     private void Window_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
@@ -129,14 +136,14 @@ public partial class MainWindow : Window
         }
         else if (Keyboard.Modifiers == ModifierKeys.Shift)
         {
-            var step = e.Delta > 0 ? -60.0 : 60.0;
-            barsScroller.ScrollToVerticalOffset(barsScroller.VerticalOffset + step);
+            var vStep = e.Delta > 0 ? -barsScroller.ViewportHeight / 6 : barsScroller.ViewportHeight / 6;
+            barsScroller.ScrollToVerticalOffset(barsScroller.VerticalOffset + vStep);
             e.Handled = true;
         }
         else
         {
-            var step = e.Delta > 0 ? -120.0 : 120.0;
-            barsScroller.ScrollToHorizontalOffset(barsScroller.HorizontalOffset + step);
+            var hStep = e.Delta > 0 ? -barsScroller.ViewportWidth / 8 : barsScroller.ViewportWidth / 8;
+            barsScroller.ScrollToHorizontalOffset(barsScroller.HorizontalOffset + hStep);
             e.Handled = true;
         }
     }
