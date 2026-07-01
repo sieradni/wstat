@@ -2,6 +2,7 @@ using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using Wstat.Desktop.Common;
 
 namespace Wstat.Desktop.Services;
 
@@ -12,7 +13,7 @@ public class LocalHttpServer : IDisposable
         PropertyNameCaseInsensitive = true
     };
 
-    private static readonly string LogPath = CreateLogPath();
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     private readonly TcpListener _listener;
     private readonly WindowTrackerService _tracker;
@@ -32,11 +33,11 @@ public class LocalHttpServer : IDisposable
         {
             _listener.Start();
             _listenTask = ListenLoop(_cts.Token);
-            WriteLog("Server started on 127.0.0.1:12345");
+            LogWriter.Write("[HttpServer] Server started on 127.0.0.1:12345");
         }
         catch (Exception ex)
         {
-            WriteLog($"FAILED to start: {ex.Message}");
+            LogWriter.Write("[HttpServer] FAILED to start: " + ex.Message);
         }
     }
 
@@ -47,17 +48,11 @@ public class LocalHttpServer : IDisposable
             try
             {
                 var client = await _listener.AcceptTcpClientAsync(ct);
-                WriteLog($"Connection from {client.Client.RemoteEndPoint}");
+                LogWriter.Write("[HttpServer] Connection from " + client.Client.RemoteEndPoint);
                 _ = HandleClient(client, ct);
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
-            }
+            catch (OperationCanceledException) { break; }
+            catch (ObjectDisposedException) { break; }
         }
     }
 
@@ -65,18 +60,21 @@ public class LocalHttpServer : IDisposable
     {
         try
         {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(RequestTimeout);
+
             using (client)
             using (var stream = client.GetStream())
             using (var reader = new StreamReader(stream, Encoding.UTF8))
             {
-                var requestLine = await reader.ReadLineAsync(ct);
-                WriteLog($"Request: {requestLine ?? "(empty)"}");
+                var requestLine = await reader.ReadLineAsync(timeoutCts.Token);
+                LogWriter.Write("[HttpServer] Request: " + (requestLine ?? "(empty)"));
 
                 if (string.IsNullOrEmpty(requestLine)) return;
 
                 var contentLength = 0;
                 string? line;
-                while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(ct)))
+                while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(timeoutCts.Token)))
                 {
                     if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
                     {
@@ -88,9 +86,16 @@ public class LocalHttpServer : IDisposable
                 if (contentLength > 0)
                 {
                     var buffer = new char[contentLength];
-                    var read = await reader.ReadAsync(buffer.AsMemory(0, contentLength), ct);
-                    body = new string(buffer, 0, read);
-                    WriteLog($"Body ({read} chars): {body[..Math.Min(body.Length, 200)]}");
+                    var totalRead = 0;
+                    while (totalRead < contentLength)
+                    {
+                        var read = await reader.ReadAsync(buffer.AsMemory(totalRead, contentLength - totalRead), timeoutCts.Token);
+                        if (read == 0) break;
+                        totalRead += read;
+                    }
+                    body = new string(buffer, 0, totalRead);
+                    var preview = body.Length > 200 ? body[..200] + "..." : body;
+                    LogWriter.Write("[HttpServer] Body (" + totalRead + " chars): " + preview);
                 }
 
                 var responseBody = "{\"status\":\"ok\"}";
@@ -101,12 +106,12 @@ public class LocalHttpServer : IDisposable
                     var payload = JsonSerializer.Deserialize<TabPayload>(body, JsonOpts);
                     if (payload != null)
                     {
-                        WriteLog($"Calling SetBrowserTab(url={payload.Url}, title={payload.Title})");
+                        LogWriter.Write("[HttpServer] Calling SetBrowserTab(url=" + payload.Url + ", title=" + payload.Title + ")");
                         _tracker.SetBrowserTab(payload.Url ?? "", payload.Title ?? "");
                     }
                     else
                     {
-                        WriteLog($"Failed to deserialize body: {body}");
+                        LogWriter.Write("[HttpServer] Failed to deserialize body: " + body);
                     }
                 }
                 else
@@ -118,14 +123,18 @@ public class LocalHttpServer : IDisposable
                 var responseBytes = Encoding.UTF8.GetBytes(responseBody);
                 var response = $"{statusLine}Content-Type: application/json\r\nContent-Length: {responseBytes.Length}\r\nConnection: close\r\n\r\n";
                 var headerBytes = Encoding.UTF8.GetBytes(response);
-                await stream.WriteAsync(headerBytes, ct);
-                await stream.WriteAsync(responseBytes, ct);
-                await stream.FlushAsync(ct);
+                await stream.WriteAsync(headerBytes, timeoutCts.Token);
+                await stream.WriteAsync(responseBytes, timeoutCts.Token);
+                await stream.FlushAsync(timeoutCts.Token);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            LogWriter.Write("[HttpServer] Request timed out");
         }
         catch (Exception ex)
         {
-            WriteLog($"HandleClient error: {ex.Message}");
+            LogWriter.Write("[HttpServer] HandleClient error: " + ex.Message);
         }
     }
 
@@ -141,24 +150,6 @@ public class LocalHttpServer : IDisposable
         _disposed = true;
         Stop();
         _cts.Dispose();
-    }
-
-    private static string CreateLogPath()
-    {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "wstat");
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, "trace.log");
-    }
-
-    private static void WriteLog(string message)
-    {
-        try
-        {
-            File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} [HttpServer] {message}\n");
-        }
-        catch { }
     }
 
     private class TabPayload

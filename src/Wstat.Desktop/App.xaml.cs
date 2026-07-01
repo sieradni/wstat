@@ -2,6 +2,7 @@
 using System.IO;
 using System.Threading;
 using System.Windows;
+using Wstat.Desktop.Common;
 using Wstat.Desktop.Services;
 using Wstat.Desktop.ViewModels;
 using Forms = System.Windows.Forms;
@@ -22,6 +23,8 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        LogWriter.Initialize();
+
         const string mutexName = "Local\\Wstat_Desktop_App";
         bool createdNew;
         _instanceMutex = new Mutex(true, mutexName, out createdNew);
@@ -37,27 +40,18 @@ public partial class App : System.Windows.Application
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             var ex = args.ExceptionObject as Exception;
-            var logPath = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "wstat", "trace.log");
-            try
+            LogWriter.Write("[FATAL] Unhandled: " + ex?.GetType().Name + ": " + ex?.Message);
+            if (ex != null)
             {
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:HH:mm:ss.fff} [FATAL] Unhandled: {ex?.GetType().Name}: {ex?.Message}\n{ex?.StackTrace}\n");
+                try { System.IO.File.AppendAllText(AppPaths.LogPath, ex.StackTrace + "\n"); }
+                catch { }
             }
-            catch { }
         };
 
         DispatcherUnhandledException += (_, args) =>
         {
-            var logPath = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "wstat", "trace.log");
-            try
-            {
-                System.IO.File.AppendAllText(logPath,
-                    $"{DateTime.Now:HH:mm:ss.fff} [FATAL] Dispatcher: {args.Exception.GetType().Name}: {args.Exception.Message}\n{args.Exception.StackTrace}\n");
-            }
+            LogWriter.Write("[FATAL] Dispatcher: " + args.Exception.GetType().Name + ": " + args.Exception.Message);
+            try { System.IO.File.AppendAllText(AppPaths.LogPath, args.Exception.StackTrace + "\n"); }
             catch { }
             args.Handled = true;
         };
@@ -191,16 +185,18 @@ public partial class App : System.Windows.Application
         _viewModel?.Dispose();
         if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
         _db?.Dispose();
+        LogWriter.Shutdown();
         Current.Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _tracker?.Stop();
-        _httpServer?.Stop();
+        _tracker?.Dispose();
+        _httpServer?.Dispose();
         _viewModel?.Dispose();
         if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
         _db?.Dispose();
+        LogWriter.Shutdown();
         if (_instanceMutex != null)
         {
             _instanceMutex.ReleaseMutex();

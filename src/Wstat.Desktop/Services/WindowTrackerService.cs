@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Timers;
+using Wstat.Desktop.Common;
 using Wstat.Desktop.Models;
 using Wstat.Desktop.Native;
 using Timer = System.Timers.Timer;
@@ -14,12 +15,13 @@ public class WindowTrackerService : IDisposable
 
     private readonly DatabaseService _db;
     private readonly Timer _timer;
+    private readonly object _stateLock = new();
 
     private ActivityRecord? _currentRecord;
     private string? _lastProcessPath;
     private string? _lastWindowTitle;
     private bool _wasIdle;
-    private bool _disposed;
+    private volatile bool _disposed;
 
     private string? _pendingProcessPath;
     private string? _pendingWindowTitle;
@@ -38,7 +40,7 @@ public class WindowTrackerService : IDisposable
     public WindowTrackerService(DatabaseService db)
     {
         _db = db;
-        _timer = new Timer(PollIntervalMs);
+        _timer = new Timer(PollIntervalMs) { AutoReset = false };
         _timer.Elapsed += OnTimerElapsed;
     }
 
@@ -51,48 +53,44 @@ public class WindowTrackerService : IDisposable
     public void Stop()
     {
         _timer.Stop();
-        CloseCurrentRecord();
-    }
-
-    private static readonly string LogPath = CreateLogPath();
-
-    private static string CreateLogPath()
-    {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "wstat");
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, "trace.log");
+        lock (_stateLock) { CloseCurrentRecord(); }
     }
 
     public void SetBrowserTab(string url, string title)
     {
-        _latestBrowserUrl = url;
-        _latestBrowserTitle = title;
+        ActivityRecord? updatedRecord = null;
 
-        // Only store http/https URLs
-        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        lock (_stateLock)
         {
-            return;
-        }
+            _latestBrowserUrl = url;
+            _latestBrowserTitle = title;
 
-        if (_currentRecord != null && !_wasIdle &&
-            string.Equals(_currentRecord.AppName, "firefox.exe", StringComparison.OrdinalIgnoreCase))
-        {
-            _currentRecord.BrowserUrl = url;
-            _currentRecord.WindowTitle = title;
-            if (_currentRecord.Id != 0)
+            if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
-                _db.UpdateBrowserUrl(_currentRecord.Id, url);
+                return;
             }
-            RecordUpdated?.Invoke(_currentRecord);
-            File.AppendAllText(LogPath, $"{DateTime.Now:O} STORED: {title} ({url})\n");
+
+            if (_currentRecord != null && !_wasIdle &&
+                string.Equals(_currentRecord.AppName, "firefox.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                _currentRecord.BrowserUrl = url;
+                _currentRecord.WindowTitle = title;
+                if (_currentRecord.Id != 0)
+                {
+                    _db.UpdateBrowserUrl(_currentRecord.Id, url);
+                }
+                updatedRecord = _currentRecord;
+                LogWriter.Write("[WindowTracker] STORED: " + title + " (" + url + ")");
+            }
+            else
+            {
+                LogWriter.Write("[WindowTracker] SKIPPED: curr=" + (_currentRecord?.AppName ?? "null") + ", idle=" + _wasIdle + ", url=" + url);
+            }
         }
-        else
-        {
-            File.AppendAllText(LogPath, $"{DateTime.Now:O} SKIPPED: curr={_currentRecord?.AppName}, idle={_wasIdle}, url={url}\n");
-        }
+
+        if (updatedRecord != null)
+            RecordUpdated?.Invoke(updatedRecord);
     }
 
     private void OnTimerElapsed(object? sender, ElapsedEventArgs e)
@@ -109,140 +107,151 @@ public class WindowTrackerService : IDisposable
             var idleDuration = nowTick - lastInputTick;
             var isIdle = idleDuration > IdleThresholdMs;
 
-            if (hWnd == IntPtr.Zero)
-            {
-                return;
-            }
+            if (hWnd == IntPtr.Zero) return;
 
             if (string.IsNullOrEmpty(processPath))
             {
-                CloseCurrentRecord();
+                lock (_stateLock) { CloseCurrentRecord(); }
                 return;
             }
 
             var appName = Path.GetFileName(processPath);
 
-            if (isIdle != _wasIdle)
+            ActivityRecord? updatedRecord = null;
+            bool idleStateChanged = false;
+            bool idleEntered = false;
+
+            lock (_stateLock)
             {
-                if (isIdle)
+                if (isIdle != _wasIdle)
                 {
-                    CloseCurrentRecord();
-                    IsIdle = true;
-                    _wasIdle = true;
-                    IdleStateChanged?.Invoke(true);
-                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} IDLE enter\n");
+                    if (isIdle)
+                    {
+                        CloseCurrentRecord();
+                        IsIdle = true;
+                        _wasIdle = true;
+                        idleStateChanged = true;
+                        idleEntered = true;
+                        LogWriter.Write("[WindowTracker] IDLE enter");
+                    }
+                    else
+                    {
+                        IsIdle = false;
+                        _wasIdle = false;
+                        idleStateChanged = true;
+                        idleEntered = false;
+                        updatedRecord = StartNewRecord(processPath, windowTitle ?? "", appName);
+                        _lastProcessPath = processPath;
+                        _lastWindowTitle = windowTitle ?? "";
+                        LogWriter.Write("[WindowTracker] IDLE exit path=" + appName);
+                    }
+                    return;
+                }
+
+                if (isIdle) return;
+
+                var processChanged = processPath != _lastProcessPath;
+
+                if (processChanged)
+                {
+                    if (_pendingProcessPath == null)
+                    {
+                        _pendingProcessPath = processPath;
+                        _pendingWindowTitle = windowTitle ?? "";
+                        _pendingAppName = appName;
+                        _pendingCount = 1;
+                        LogWriter.Write("[WindowTracker] DEBOUNCE first-sight path=" + appName);
+                    }
+                    else if (processPath == _pendingProcessPath &&
+                             _pendingCount < 2)
+                    {
+                        _pendingCount++;
+                        LogWriter.Write("[WindowTracker] DEBOUNCE increment path=" + appName + " count=" + _pendingCount);
+                    }
+                    else if (processPath != _pendingProcessPath)
+                    {
+                        LogWriter.Write("[WindowTracker] DEBOUNCE third-process pending=" + _pendingAppName + " now=" + appName);
+                        CloseCurrentRecord();
+                        _pendingProcessPath = null;
+                        _pendingCount = 0;
+                        updatedRecord = StartNewRecord(processPath, windowTitle ?? "", appName);
+                        _lastProcessPath = processPath;
+                        _lastWindowTitle = windowTitle ?? "";
+                    }
+
+                    if (_pendingProcessPath != null && _pendingCount >= 2)
+                    {
+                        LogWriter.Write("[WindowTracker] DEBOUNCE commit path=" + _pendingAppName);
+                        CloseCurrentRecord();
+                        updatedRecord = StartNewRecord(_pendingProcessPath, _pendingWindowTitle ?? "", _pendingAppName!);
+                        _lastProcessPath = _pendingProcessPath;
+                        _lastWindowTitle = _pendingWindowTitle ?? "";
+                        _pendingProcessPath = null;
+                        _pendingCount = 0;
+                    }
+
+                    if (_pendingProcessPath != null && _currentRecord != null)
+                    {
+                        _db.InsertOrUpdateActive(_currentRecord);
+                        updatedRecord = _currentRecord;
+                    }
                 }
                 else
                 {
-                    IsIdle = false;
-                    _wasIdle = false;
-                    IdleStateChanged?.Invoke(false);
-                    StartNewRecord(processPath, windowTitle ?? "", appName);
-                    _lastProcessPath = processPath;
-                    _lastWindowTitle = windowTitle ?? "";
-                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} IDLE exit path={appName}\n");
-                }
-                return;
-            }
-
-            if (isIdle) return;
-
-            var processChanged = processPath != _lastProcessPath;
-
-            if (processChanged)
-            {
-                if (_pendingProcessPath == null)
-                {
-                    // First sighting of a new process — start debounce
-                    _pendingProcessPath = processPath;
-                    _pendingWindowTitle = windowTitle ?? "";
-                    _pendingAppName = appName;
-                    _pendingCount = 1;
-                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE first-sight path={appName}\n");
-                }
-                else if (processPath == _pendingProcessPath &&
-                         _pendingCount < 2)
-                {
-                    // Still the same new process, count up
-                    _pendingCount++;
-                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE increment path={appName} count={_pendingCount}\n");
-                }
-                else if (processPath != _pendingProcessPath)
-                {
-                    // A third process appeared before debounce settled
-                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE third-process pending={_pendingAppName} now={appName}\n");
-                    CloseCurrentRecord();
-                    _pendingProcessPath = null;
-                    _pendingCount = 0;
-                    StartNewRecord(processPath, windowTitle ?? "", appName);
-                    _lastProcessPath = processPath;
-                    _lastWindowTitle = windowTitle ?? "";
-                }
-
-                // Check if we should commit the pending switch
-                if (_pendingProcessPath != null && _pendingCount >= 2)
-                {
-                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE commit path={_pendingAppName}\n");
-                    CloseCurrentRecord();
-                    StartNewRecord(_pendingProcessPath, _pendingWindowTitle ?? "", _pendingAppName!);
-                    _lastProcessPath = _pendingProcessPath;
-                    _lastWindowTitle = _pendingWindowTitle ?? "";
-                    _pendingProcessPath = null;
-                    _pendingCount = 0;
-                }
-
-                // If pending is still active, update its window title
-                if (_pendingProcessPath != null && _currentRecord != null)
-                {
-                    _db.InsertOrUpdateActive(_currentRecord);
-                    RecordUpdated?.Invoke(_currentRecord);
-                }
-            }
-            else
-            {
-                // No process change
-                if (_pendingProcessPath != null)
-                {
-                    // We were about to switch but the user came back — cancel
-                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} DEBOUNCE cancel path={_pendingAppName}\n");
-                    _pendingProcessPath = null;
-                    _pendingCount = 0;
-                }
-
-                if (_currentRecord != null)
-                {
-                    var titleChanged = (windowTitle ?? "") != _lastWindowTitle;
-                    if (titleChanged)
+                    if (_pendingProcessPath != null)
                     {
-                        _currentRecord.WindowTitle = windowTitle ?? "";
-                        var isFirefox = appName.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase);
-                        if (isFirefox && _latestBrowserUrl != null)
-                        {
-                            _currentRecord.BrowserUrl = _latestBrowserUrl;
-                            _currentRecord.WindowTitle = _latestBrowserTitle ?? windowTitle ?? "";
-                        }
+                        LogWriter.Write("[WindowTracker] DEBOUNCE cancel path=" + _pendingAppName);
+                        _pendingProcessPath = null;
+                        _pendingCount = 0;
                     }
 
-                    _db.InsertOrUpdateActive(_currentRecord);
-                    RecordUpdated?.Invoke(_currentRecord);
-                    _lastWindowTitle = windowTitle ?? "";
-                }
-                else if (_lastProcessPath != null)
-                {
-                    StartNewRecord(processPath, windowTitle ?? "", appName);
-                    _lastWindowTitle = windowTitle ?? "";
-                    File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} RECOVER restart={appName}\n");
+                    if (_currentRecord != null)
+                    {
+                        var titleChanged = (windowTitle ?? "") != _lastWindowTitle;
+                        if (titleChanged)
+                        {
+                            _currentRecord.WindowTitle = windowTitle ?? "";
+                            var isFirefox = appName.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase);
+                            if (isFirefox && _latestBrowserUrl != null)
+                            {
+                                _currentRecord.BrowserUrl = _latestBrowserUrl;
+                                _currentRecord.WindowTitle = _latestBrowserTitle ?? windowTitle ?? "";
+                            }
+                        }
+
+                        _db.InsertOrUpdateActive(_currentRecord);
+                        updatedRecord = _currentRecord;
+                        _lastWindowTitle = windowTitle ?? "";
+                    }
+                    else if (_lastProcessPath != null)
+                    {
+                        updatedRecord = StartNewRecord(processPath, windowTitle ?? "", appName);
+                        _lastWindowTitle = windowTitle ?? "";
+                        LogWriter.Write("[WindowTracker] RECOVER restart=" + appName);
+                    }
                 }
             }
 
+            if (idleStateChanged)
+                IdleStateChanged?.Invoke(idleEntered);
+
+            if (updatedRecord != null)
+                RecordUpdated?.Invoke(updatedRecord);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[WindowTracker] Error: {ex.Message}");
         }
+        finally
+        {
+            if (!_disposed)
+            {
+                try { _timer.Start(); } catch { }
+            }
+        }
     }
 
-    private void StartNewRecord(string processPath, string windowTitle, string appName)
+    private ActivityRecord? StartNewRecord(string processPath, string windowTitle, string appName)
     {
         var appNameLower = appName.ToLowerInvariant();
         var isFirefox = appNameLower == "firefox.exe";
@@ -259,14 +268,13 @@ public class WindowTrackerService : IDisposable
         };
 
         _db.InsertOrUpdateActive(_currentRecord);
-        RecordUpdated?.Invoke(_currentRecord);
+        return _currentRecord;
     }
 
     private void CloseCurrentRecord()
     {
         if (_currentRecord == null) return;
         _db.CloseActive(_currentRecord);
-        RecordUpdated?.Invoke(_currentRecord);
         _currentRecord = null;
     }
 
@@ -274,8 +282,9 @@ public class WindowTrackerService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        Stop();
+        _timer.Stop();
         _timer.Dispose();
+        lock (_stateLock) { CloseCurrentRecord(); }
         _db.Dispose();
     }
 }

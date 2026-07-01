@@ -33,10 +33,19 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
             {
                 _selectedFilter = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(IsTodaySelected));
+                OnPropertyChanged(nameof(IsYesterdaySelected));
+                OnPropertyChanged(nameof(IsLast7DaysSelected));
+                OnPropertyChanged(nameof(IsLast30DaysSelected));
                 LoadAll();
             }
         }
     }
+
+    public bool IsTodaySelected => _selectedFilter == DateFilter.Today;
+    public bool IsYesterdaySelected => _selectedFilter == DateFilter.Yesterday;
+    public bool IsLast7DaysSelected => _selectedFilter == DateFilter.Last7Days;
+    public bool IsLast30DaysSelected => _selectedFilter == DateFilter.Last30Days;
 
     public RelayCommand FilterTodayCommand { get; }
     public RelayCommand FilterYesterdayCommand { get; }

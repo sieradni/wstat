@@ -1,4 +1,5 @@
 using System.Windows.Media.Imaging;
+using Wstat.Desktop.Common;
 
 namespace Wstat.Desktop.Models;
 
@@ -15,18 +16,10 @@ public class ActivityRecord
 
     public string DisplayDuration =>
         EndTime.HasValue
-            ? FormatDuration(DurationSeconds)
-            : FormatDuration((int)(DateTime.Now - StartTime).TotalSeconds);
+            ? Formatting.FormatDuration(DurationSeconds)
+            : Formatting.FormatDuration((int)(DateTime.Now - StartTime).TotalSeconds);
 
     public bool IsActive => EndTime == null;
-
-    private static string FormatDuration(int seconds)
-    {
-        var ts = TimeSpan.FromSeconds(seconds);
-        return ts.TotalHours >= 1
-            ? $"{(int)ts.TotalHours}h {ts.Minutes}m"
-            : $"{ts.Minutes}m {ts.Seconds}s";
-    }
 }
 
 public class AppSummary
@@ -35,16 +28,7 @@ public class AppSummary
     public string? ProcessPath { get; set; }
     public long TotalSeconds { get; set; }
     public BitmapSource? Icon { get; set; }
-    public string DisplayTime
-    {
-        get
-        {
-            var ts = TimeSpan.FromSeconds(TotalSeconds);
-            return ts.TotalHours >= 1
-                ? $"{(int)ts.TotalHours}h {ts.Minutes}m"
-                : $"{ts.Minutes}m {ts.Seconds}s";
-        }
-    }
+    public string DisplayTime => Formatting.FormatDuration(TotalSeconds);
 }
 
 public class UrlSummary
@@ -53,14 +37,5 @@ public class UrlSummary
     public string Title { get; set; } = string.Empty;
     public int VisitCount { get; set; }
     public long TotalSeconds { get; set; }
-    public string DisplayTime
-    {
-        get
-        {
-            var ts = TimeSpan.FromSeconds(TotalSeconds);
-            return ts.TotalHours >= 1
-                ? $"{(int)ts.TotalHours}h {ts.Minutes}m"
-                : $"{ts.Minutes}m {ts.Seconds}s";
-        }
-    }
+    public string DisplayTime => Formatting.FormatDuration(TotalSeconds);
 }

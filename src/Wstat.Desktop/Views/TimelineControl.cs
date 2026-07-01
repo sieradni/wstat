@@ -5,6 +5,7 @@ using MediaBrush = System.Windows.Media.Brush;
 using MediaColor = System.Windows.Media.Color;
 using MediaPen = System.Windows.Media.Pen;
 using WinSize = System.Windows.Size;
+using Wstat.Desktop.Common;
 
 namespace Wstat.Desktop.Views;
 
@@ -14,7 +15,6 @@ public class TimelineControl : Canvas
     private const double RowHeight = 34;
     private const double BarHeight = 26;
 
-    private static readonly Dictionary<MediaColor, MediaBrush> _brushCache = [];
     private static readonly Typeface _typeface = new("Segoe UI");
     private static readonly MediaPen _markerPen;
     private static readonly MediaPen _nowLinePen;
@@ -23,14 +23,14 @@ public class TimelineControl : Canvas
 
     static TimelineControl()
     {
-        _markerPen = new MediaPen(GetCachedBrush(MediaColor.FromRgb(0xDD, 0xDD, 0xDD)), 0.5);
+        _markerPen = new MediaPen(BrushCache.Get(MediaColor.FromRgb(0xDD, 0xDD, 0xDD)), 0.5);
         _markerPen.Freeze();
 
-        _nowLinePen = new MediaPen(GetCachedBrush(MediaColor.FromArgb(0xCC, 0xE5, 0x39, 0x35)), 1.5);
+        _nowLinePen = new MediaPen(BrushCache.Get(MediaColor.FromArgb(0xCC, 0xE5, 0x39, 0x35)), 1.5);
         _nowLinePen.Freeze();
 
-        _textBrush = GetCachedBrush(MediaColor.FromRgb(0x66, 0x66, 0x66));
-        _zebraBrush = GetCachedBrush(MediaColor.FromArgb(0x08, 0x00, 0x00, 0x00));
+        _textBrush = BrushCache.Get(MediaColor.FromRgb(0x66, 0x66, 0x66));
+        _zebraBrush = BrushCache.Get(MediaColor.FromArgb(0x08, 0x00, 0x00, 0x00));
     }
 
     private List<Models.TimelineEntry> _entries = [];
@@ -148,7 +148,7 @@ public class TimelineControl : Canvas
                     if (width > 0)
                     {
                         var barRect = new System.Windows.Rect(left, barY, width, BarHeight);
-                        dc.DrawRectangle(GetCachedBrush(entry.TitleColor), null, barRect);
+                        dc.DrawRectangle(BrushCache.Get(entry.TitleColor), null, barRect);
                         _entryRects.Add((barRect, entry));
                         DrawWindowTitle(dc, entry, left, barY, width);
                     }
@@ -159,7 +159,7 @@ public class TimelineControl : Canvas
         }
     }
 
-    private static void DrawBackground(DrawingContext dc, int rowCount)
+    private void DrawBackground(DrawingContext dc, int rowCount)
     {
         for (int i = 0; i < rowCount; i++)
         {
@@ -198,7 +198,7 @@ public class TimelineControl : Canvas
         var now = DateTime.Now;
         var todayStart = now.Date;
 
-        if (_firstDate.HasValue && _firstDate.Value != todayStart) return;
+        if (!_firstDate.HasValue || _firstDate.Value != todayStart) return;
 
         var x = (now - todayStart).TotalHours * hourPx;
 
@@ -217,50 +217,15 @@ public class TimelineControl : Canvas
         var fontSize = Math.Min(11, Math.Max(7, barWidth / (title.Length * 0.6)));
         if (fontSize < 7) return;
 
-        var textBrush = GetCachedBrush(Colors.White);
-        var ft = new FormattedText(title, System.Globalization.CultureInfo.CurrentCulture,
-            System.Windows.FlowDirection.LeftToRight, _typeface, fontSize, textBrush, 1.25);
+        var textBrush = BrushCache.Get(Colors.White);
+        var availableWidth = barWidth - 6;
 
-        if (ft.Width > barWidth - 6)
-        {
-            var ellipsis = "\u2026";
-            var dotWidth = new FormattedText(ellipsis, System.Globalization.CultureInfo.CurrentCulture,
-                System.Windows.FlowDirection.LeftToRight, _typeface, fontSize, textBrush, 1.25).Width;
-            var maxText = barWidth - 6 - dotWidth;
+        if (availableWidth <= 0) return;
 
-            int lo = 0, hi = title.Length;
-            while (lo < hi)
-            {
-                int mid = (lo + hi + 1) / 2;
-                var test = new FormattedText(title[..mid], System.Globalization.CultureInfo.CurrentCulture,
-                    System.Windows.FlowDirection.LeftToRight, _typeface, fontSize, textBrush, 1.25);
-                if (test.Width <= maxText)
-                    lo = mid;
-                else
-                    hi = mid - 1;
-            }
+        var ft = TextHelper.BuildTruncatedText(title, availableWidth, _typeface, fontSize, textBrush, 1.25);
 
-            if (lo > 0)
-                ft = new FormattedText(title[..lo] + ellipsis, System.Globalization.CultureInfo.CurrentCulture,
-                    System.Windows.FlowDirection.LeftToRight, _typeface, fontSize, textBrush, 1.25);
-            else
-                return;
-        }
+        if (ft.Width > availableWidth) return;
 
         dc.DrawText(ft, new System.Windows.Point(left + 3, barY + (BarHeight - ft.Height) / 2));
-    }
-
-    private static MediaBrush GetCachedBrush(MediaColor color)
-    {
-        lock (_brushCache)
-        {
-            if (!_brushCache.TryGetValue(color, out var brush))
-            {
-                brush = new SolidColorBrush(color);
-                brush.Freeze();
-                _brushCache[color] = brush;
-            }
-            return brush;
-        }
     }
 }
