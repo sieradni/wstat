@@ -75,7 +75,8 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     {
         LoadApps();
         LoadUrls();
-        LoadTimeline();
+        if (_selectedFilter == DateFilter.Today)
+            LoadTimeline();
     }
 
     private void LoadApps()

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using MediaBrush = System.Windows.Media.Brush;
 using MediaColor = System.Windows.Media.Color;
 using MediaPen = System.Windows.Media.Pen;
 using WinSize = System.Windows.Size;
@@ -13,9 +14,39 @@ public class TimelineControl : Canvas
     private const double RowHeight = 34;
     private const double BarHeight = 26;
 
+    private static readonly Dictionary<MediaColor, MediaBrush> _brushCache = [];
+    private static readonly Typeface _typeface = new("Segoe UI");
+    private static readonly MediaPen _markerPen;
+    private static readonly MediaPen _nowLinePen;
+    private static readonly MediaBrush _textBrush;
+    private static readonly MediaBrush _zebraBrush;
+
+    static TimelineControl()
+    {
+        _markerPen = new MediaPen(GetCachedBrush(MediaColor.FromRgb(0xDD, 0xDD, 0xDD)), 0.5);
+        _markerPen.Freeze();
+
+        _nowLinePen = new MediaPen(GetCachedBrush(MediaColor.FromArgb(0xCC, 0xE5, 0x39, 0x35)), 1.5);
+        _nowLinePen.Freeze();
+
+        _textBrush = GetCachedBrush(MediaColor.FromRgb(0x66, 0x66, 0x66));
+        _zebraBrush = GetCachedBrush(MediaColor.FromArgb(0x08, 0x00, 0x00, 0x00));
+    }
+
     private List<Models.TimelineEntry> _entries = [];
     private List<IGrouping<string, Models.TimelineEntry>> _groups = [];
     private double _hourWidth = 60;
+    private DateTime? _firstDate;
+    private List<(Rect Bounds, Models.TimelineEntry Entry)> _entryRects = [];
+
+    public Models.TimelineEntry? GetEntryAt(System.Windows.Point pos)
+    {
+        foreach (var (bounds, entry) in _entryRects)
+        {
+            if (bounds.Contains(pos)) return entry;
+        }
+        return null;
+    }
 
     public TimelineControl()
     {
@@ -44,6 +75,7 @@ public class TimelineControl : Canvas
     {
         _entries = entries;
         _groups = entries.GroupBy(e => e.AppName).ToList();
+        _firstDate = entries.Count > 0 ? entries.Min(e => e.StartTime.Date) : null;
         ToolTip = null;
         InvalidateVisual();
         InvalidateMeasure();
@@ -87,10 +119,12 @@ public class TimelineControl : Canvas
         DrawHourMarkers(dc, hourPx);
         DrawNowLine(dc, hourPx);
 
+        _entryRects.Clear();
         var row = 0;
         foreach (var group in _groups)
         {
             var y = TopMargin + row * RowHeight;
+            var barY = y + (RowHeight - BarHeight) / 2;
 
             foreach (var entry in group)
             {
@@ -102,7 +136,6 @@ public class TimelineControl : Canvas
 
                 var left = spanStart.TotalHours * hourPx;
                 var width = Math.Max((spanEnd - spanStart).TotalHours * hourPx, 2);
-                var barY = y + (RowHeight - BarHeight) / 2;
 
                 if (left + width > 0)
                 {
@@ -114,8 +147,9 @@ public class TimelineControl : Canvas
 
                     if (width > 0)
                     {
-                        var barBrush = new SolidColorBrush(entry.TitleColor);
-                        dc.DrawRectangle(barBrush, null, new System.Windows.Rect(left, barY, width, BarHeight));
+                        var barRect = new System.Windows.Rect(left, barY, width, BarHeight);
+                        dc.DrawRectangle(GetCachedBrush(entry.TitleColor), null, barRect);
+                        _entryRects.Add((barRect, entry));
                         DrawWindowTitle(dc, entry, left, barY, width);
                     }
                 }
@@ -132,7 +166,7 @@ public class TimelineControl : Canvas
             if (i % 2 == 1)
             {
                 var y = TopMargin + i * RowHeight;
-                dc.DrawRectangle(new SolidColorBrush(MediaColor.FromArgb(0x08, 0x00, 0x00, 0x00)),
+                dc.DrawRectangle(_zebraBrush,
                     null, new System.Windows.Rect(0, y, 50000, RowHeight));
             }
         }
@@ -140,9 +174,6 @@ public class TimelineControl : Canvas
 
     private void DrawHourMarkers(DrawingContext dc, double hourPx)
     {
-        var markerPen = new MediaPen(new SolidColorBrush(MediaColor.FromRgb(0xDD, 0xDD, 0xDD)), 0.5);
-        var textBrush = new SolidColorBrush(MediaColor.FromRgb(0x66, 0x66, 0x66));
-        var typeface = new Typeface("Segoe UI");
         var bottom = ActualHeight > 0 ? ActualHeight : TopMargin + 8;
 
         for (int h = 0; h <= 24; h++)
@@ -150,13 +181,13 @@ public class TimelineControl : Canvas
             if (h > 0 && h < 24 && h % 2 != 0) continue;
 
             var x = h * hourPx;
-            dc.DrawLine(markerPen, new System.Windows.Point(x, TopMargin - 4), new System.Windows.Point(x, bottom));
+            dc.DrawLine(_markerPen, new System.Windows.Point(x, TopMargin - 4), new System.Windows.Point(x, bottom));
 
             if (h <= 24)
             {
                 var label = h == 24 ? "24:00" : $"{h:D2}:00";
                 var ft = new FormattedText(label, System.Globalization.CultureInfo.CurrentCulture,
-                    System.Windows.FlowDirection.LeftToRight, typeface, 10, textBrush, 1.25);
+                    System.Windows.FlowDirection.LeftToRight, _typeface, 10, _textBrush, 1.25);
                 dc.DrawText(ft, new System.Windows.Point(x - ft.Width / 2, 4));
             }
         }
@@ -167,19 +198,14 @@ public class TimelineControl : Canvas
         var now = DateTime.Now;
         var todayStart = now.Date;
 
-        if (_entries.Count > 0)
-        {
-            var firstDate = _entries.Min(e => e.StartTime.Date);
-            if (firstDate != todayStart) return;
-        }
+        if (_firstDate.HasValue && _firstDate.Value != todayStart) return;
 
         var x = (now - todayStart).TotalHours * hourPx;
 
         if (x >= 0 && x <= 24 * hourPx)
         {
-            var pen = new MediaPen(new SolidColorBrush(MediaColor.FromArgb(0xCC, 0xE5, 0x39, 0x35)), 1.5);
             var bottom = ActualHeight > 0 ? ActualHeight : TopMargin + 8;
-            dc.DrawLine(pen, new System.Windows.Point(x, TopMargin - 4), new System.Windows.Point(x, bottom));
+            dc.DrawLine(_nowLinePen, new System.Windows.Point(x, TopMargin - 4), new System.Windows.Point(x, bottom));
         }
     }
 
@@ -188,35 +214,53 @@ public class TimelineControl : Canvas
         var title = entry.WindowTitle;
         if (string.IsNullOrEmpty(title)) return;
 
-        var typeface = new Typeface("Segoe UI");
-        var textBrush = new SolidColorBrush(Colors.White);
         var fontSize = Math.Min(11, Math.Max(7, barWidth / (title.Length * 0.6)));
-
         if (fontSize < 7) return;
 
+        var textBrush = GetCachedBrush(Colors.White);
         var ft = new FormattedText(title, System.Globalization.CultureInfo.CurrentCulture,
-            System.Windows.FlowDirection.LeftToRight, typeface, fontSize, textBrush, 1.25);
+            System.Windows.FlowDirection.LeftToRight, _typeface, fontSize, textBrush, 1.25);
 
         if (ft.Width > barWidth - 6)
         {
-            var dotFmt = new FormattedText("...", System.Globalization.CultureInfo.CurrentCulture,
-                System.Windows.FlowDirection.LeftToRight, typeface, fontSize, textBrush, 1.25);
-            var maxText = barWidth - 6 - dotFmt.Width;
+            var ellipsis = "\u2026";
+            var dotWidth = new FormattedText(ellipsis, System.Globalization.CultureInfo.CurrentCulture,
+                System.Windows.FlowDirection.LeftToRight, _typeface, fontSize, textBrush, 1.25).Width;
+            var maxText = barWidth - 6 - dotWidth;
 
-            for (int i = title.Length - 1; i > 0; i--)
+            int lo = 0, hi = title.Length;
+            while (lo < hi)
             {
-                var test = new FormattedText(title[..i], System.Globalization.CultureInfo.CurrentCulture,
-                    System.Windows.FlowDirection.LeftToRight, typeface, fontSize, textBrush, 1.25);
+                int mid = (lo + hi + 1) / 2;
+                var test = new FormattedText(title[..mid], System.Globalization.CultureInfo.CurrentCulture,
+                    System.Windows.FlowDirection.LeftToRight, _typeface, fontSize, textBrush, 1.25);
                 if (test.Width <= maxText)
-                {
-                    ft = new FormattedText(title[..i] + "...", System.Globalization.CultureInfo.CurrentCulture,
-                        System.Windows.FlowDirection.LeftToRight, typeface, fontSize, textBrush, 1.25);
-                    break;
-                }
+                    lo = mid;
+                else
+                    hi = mid - 1;
             }
+
+            if (lo > 0)
+                ft = new FormattedText(title[..lo] + ellipsis, System.Globalization.CultureInfo.CurrentCulture,
+                    System.Windows.FlowDirection.LeftToRight, _typeface, fontSize, textBrush, 1.25);
+            else
+                return;
         }
 
         dc.DrawText(ft, new System.Windows.Point(left + 3, barY + (BarHeight - ft.Height) / 2));
     }
 
+    private static MediaBrush GetCachedBrush(MediaColor color)
+    {
+        lock (_brushCache)
+        {
+            if (!_brushCache.TryGetValue(color, out var brush))
+            {
+                brush = new SolidColorBrush(color);
+                brush.Freeze();
+                _brushCache[color] = brush;
+            }
+            return brush;
+        }
+    }
 }

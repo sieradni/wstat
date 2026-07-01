@@ -1,6 +1,8 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
+using Wstat.Desktop.Native;
 using Wstat.Desktop.ViewModels;
 
 namespace Wstat.Desktop;
@@ -25,6 +27,25 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => timelinePopup.IsOpen = false;
     }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        var source = PresentationSource.FromVisual(this) as HwndSource;
+        source?.AddHook(WindowProc);
+    }
+
+    private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == Win32Api.WM_SHOW_APP)
+        {
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+            handled = true;
+        }
+        return IntPtr.Zero;
+    }
+
     private void OnTimelineUpdated()
     {
         var entries = _viewModel.TimelineEntries;
@@ -34,9 +55,11 @@ public partial class MainWindow : Window
 
     private void Window_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        var groups = timelineControl.GetGroups();
-        if (timelineControl.IsVisible == false || groups == null || groups.Count == 0)
+        if (timelineControl.IsVisible == false)
+        {
+            timelinePopup.IsOpen = false;
             return;
+        }
 
         var pos = e.GetPosition(timelineControl);
 
@@ -47,53 +70,25 @@ public partial class MainWindow : Window
             return;
         }
 
-        var row = (int)((pos.Y - 32) / 34);
-
-        if (row < 0 || row >= groups.Count)
+        var entry = timelineControl.GetEntryAt(pos);
+        if (entry != null)
         {
-            timelinePopup.IsOpen = false;
-            return;
-        }
+            var endStr = entry.EndTime == DateTime.MinValue ? "now" : entry.EndTime.ToString("HH:mm");
+            var range = $"{entry.StartTime:HH:mm} - {endStr}";
+            var dur = entry.DurationSeconds >= 3600
+                ? $"{entry.DurationSeconds / 3600}h {(entry.DurationSeconds % 3600) / 60}m"
+                : $"{entry.DurationSeconds / 60}m {entry.DurationSeconds % 60}s";
+            var name = System.IO.Path.GetFileNameWithoutExtension(entry.AppName);
+            if (string.IsNullOrEmpty(name)) name = entry.AppName;
 
-        var hourPx = Math.Max(timelineControl.ActualWidth, 24 * _hourWidth) / 24.0;
-        if (hourPx <= 0)
-        {
-            timelinePopup.IsOpen = false;
-            return;
-        }
-
-        var barY = 32 + row * 34 + (34 - 26) / 2.0;
-
-        foreach (var entry in groups[row])
-        {
-            var spanStart = entry.StartTime.TimeOfDay;
-            var spanEnd = entry.EndTime.TimeOfDay;
-
-            if (spanEnd == TimeSpan.Zero && entry.EndTime.Date > entry.StartTime.Date)
-                spanEnd = TimeSpan.FromHours(24);
-
-            var left = spanStart.TotalHours * hourPx;
-            var width = Math.Max((spanEnd - spanStart).TotalHours * hourPx, 2);
-
-            if (pos.X >= left && pos.X <= left + width && pos.Y >= barY && pos.Y <= barY + 26)
+            var text = $"{name}\n{entry.WindowTitle}\n{range}  ({dur})";
+            if (text != _lastPopupText)
             {
-                var endStr = entry.EndTime == DateTime.MinValue ? "now" : entry.EndTime.ToString("HH:mm");
-                var range = $"{entry.StartTime:HH:mm} - {endStr}";
-                var dur = entry.DurationSeconds >= 3600
-                    ? $"{entry.DurationSeconds / 3600}h {(entry.DurationSeconds % 3600) / 60}m"
-                    : $"{entry.DurationSeconds / 60}m {entry.DurationSeconds % 60}s";
-                var name = System.IO.Path.GetFileNameWithoutExtension(entry.AppName);
-                if (string.IsNullOrEmpty(name)) name = entry.AppName;
-
-                var text = $"{name}\n{entry.WindowTitle}\n{range}  ({dur})";
-                if (text != _lastPopupText)
-                {
-                    _lastPopupText = text;
-                    timelinePopupText.Text = text;
-                }
-                timelinePopup.IsOpen = true;
-                return;
+                _lastPopupText = text;
+                timelinePopupText.Text = text;
             }
+            timelinePopup.IsOpen = true;
+            return;
         }
 
         timelinePopup.IsOpen = false;
@@ -112,8 +107,8 @@ public partial class MainWindow : Window
     {
         if (Keyboard.Modifiers == ModifierKeys.Control)
         {
-            var viewportCenter = barsScroller.HorizontalOffset + barsScroller.ViewportWidth / 2;
-            var centerHour = viewportCenter / _hourWidth;
+            var mousePos = e.GetPosition(timelineControl);
+            var cursorHour = mousePos.X / _hourWidth;
 
             var delta = e.Delta > 0 ? _hourWidth * 0.12 : -_hourWidth * 0.12;
             var newWidth = Math.Max(5, _hourWidth + delta);
@@ -123,12 +118,19 @@ public partial class MainWindow : Window
                 _hourWidth = newWidth;
                 timelineControl.HourWidth = _hourWidth;
 
-                var newCenterX = centerHour * _hourWidth;
+                var newCursorX = cursorHour * _hourWidth;
                 Dispatcher.BeginInvoke(() =>
                 {
-                    barsScroller.ScrollToHorizontalOffset(Math.Max(0, newCenterX - barsScroller.ViewportWidth / 2));
+                    barsScroller.ScrollToHorizontalOffset(
+                        Math.Max(0, barsScroller.HorizontalOffset + (newCursorX - mousePos.X)));
                 });
             }
+            e.Handled = true;
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Shift)
+        {
+            var step = e.Delta > 0 ? -60.0 : 60.0;
+            barsScroller.ScrollToVerticalOffset(barsScroller.VerticalOffset + step);
             e.Handled = true;
         }
         else

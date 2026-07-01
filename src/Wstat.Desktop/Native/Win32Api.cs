@@ -36,6 +36,24 @@ internal static class Win32Api
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
 
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    public const int SW_RESTORE = 9;
+    public const uint WM_SHOW_APP = 0x8001;
+
     [StructLayout(LayoutKind.Sequential)]
     public struct LASTINPUTINFO
     {
@@ -89,5 +107,14 @@ internal static class Win32Api
         if (GetLastInputInfo(ref lii))
             return lii.dwTime;
         return 0;
+    }
+
+    public static void ActivateExistingInstance(string windowTitle)
+    {
+        var hWnd = FindWindow(null, windowTitle);
+        if (hWnd != IntPtr.Zero)
+        {
+            PostMessage(hWnd, WM_SHOW_APP, IntPtr.Zero, IntPtr.Zero);
+        }
     }
 }

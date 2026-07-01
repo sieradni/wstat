@@ -1,5 +1,6 @@
 ﻿using System.Drawing;
 using System.IO;
+using System.Threading;
 using System.Windows;
 using Wstat.Desktop.Services;
 using Wstat.Desktop.ViewModels;
@@ -9,6 +10,7 @@ namespace Wstat.Desktop;
 
 public partial class App : System.Windows.Application
 {
+    private static Mutex? _instanceMutex;
     private DatabaseService? _db;
     private WindowTrackerService? _tracker;
     private LocalHttpServer? _httpServer;
@@ -19,6 +21,18 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        const string mutexName = "Local\\Wstat_Desktop_App";
+        bool createdNew;
+        _instanceMutex = new Mutex(true, mutexName, out createdNew);
+
+        if (!createdNew)
+        {
+            _instanceMutex = null;
+            Native.Win32Api.ActivateExistingInstance("wstat \u2014 Screen Time Tracker");
+            Current.Shutdown();
+            return;
+        }
 
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
@@ -187,6 +201,12 @@ public partial class App : System.Windows.Application
         _viewModel?.Dispose();
         if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
         _db?.Dispose();
+        if (_instanceMutex != null)
+        {
+            _instanceMutex.ReleaseMutex();
+            _instanceMutex.Dispose();
+            _instanceMutex = null;
+        }
         base.OnExit(e);
     }
 }
