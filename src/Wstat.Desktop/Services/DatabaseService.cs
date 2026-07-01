@@ -106,6 +106,19 @@ public class DatabaseService : IDisposable
         cmd.ExecuteNonQuery();
     }
 
+    public void CloseOrphanedRecords()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            UPDATE ActivityLog
+            SET EndTime = $now,
+                DurationSeconds = CAST((julianday($now) - julianday(StartTime)) * 86400 AS INTEGER)
+            WHERE EndTime IS NULL;
+            """;
+        cmd.Parameters.AddWithValue("$now", DateTime.Now.ToString("O"));
+        cmd.ExecuteNonQuery();
+    }
+
     public void UpdateBrowserUrl(int recordId, string url)
     {
         using var cmd = _connection.CreateCommand();

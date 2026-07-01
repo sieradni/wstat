@@ -44,6 +44,7 @@ public class WindowTrackerService : IDisposable
 
     public void Start()
     {
+        _db.CloseOrphanedRecords();
         _timer.Start();
     }
 
