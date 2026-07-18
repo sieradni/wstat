@@ -11,6 +11,7 @@ using MediaColor = System.Windows.Media.Color;
 using Wstat.Desktop.Common;
 using Wstat.Desktop.Models;
 using Wstat.Desktop.Services;
+using Wstat.Desktop.Views;
 
 namespace Wstat.Desktop.ViewModels;
 
@@ -20,6 +21,7 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     private const int MaxIconCacheSize = 64;
 
     private readonly IDatabaseService _db;
+    private readonly SettingsModel _settings;
     private readonly DispatcherTimer _refreshTimer;
     private DateFilter _selectedFilter = DateFilter.Today;
     private DateTime _specificDate = DateTime.Now.AddDays(-1);
@@ -77,13 +79,15 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     public RelayCommand ClearDayCommand { get; }
     public RelayCommand ClearProblematicCommand { get; }
     public RelayCommand ExportCsvCommand { get; }
+    public RelayCommand ShowSettingsCommand { get; }
 
     public event Action? TimelineUpdated;
     public event Action? ApplicationsUpdated;
 
-    public DashboardViewModel(IDatabaseService db)
+    public DashboardViewModel(IDatabaseService db, SettingsModel settings)
     {
         _db = db;
+        _settings = settings;
 
         FilterTodayCommand = new RelayCommand(() => SelectedFilter = DateFilter.Today);
         FilterYesterdayCommand = new RelayCommand(() => SelectedFilter = DateFilter.Yesterday);
@@ -93,6 +97,7 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         ClearDayCommand = new RelayCommand(ClearDay);
         ClearProblematicCommand = new RelayCommand(ClearProblematic);
         ExportCsvCommand = new RelayCommand(ExportCsv);
+        ShowSettingsCommand = new RelayCommand(ShowSettings);
 
         BindingOperations.EnableCollectionSynchronization(Applications, new object());
         BindingOperations.EnableCollectionSynchronization(TopUrls, new object());
@@ -262,6 +267,14 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         var count = _db.DeleteProblematicRecordsForDay(_specificDate);
         LogWriter.Write($"[Clear] Deleted {count} problematic records for {_specificDate:yyyy-MM-dd}");
         LoadAll();
+    }
+
+    private void ShowSettings()
+    {
+        var vm = new SettingsViewModel(_settings);
+        var window = new SettingsWindow(vm);
+        window.Owner = System.Windows.Application.Current.MainWindow;
+        window.ShowDialog();
     }
 
     private void ExportCsv()

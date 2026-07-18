@@ -7,6 +7,7 @@ using Wstat.Desktop.Common;
 using Wstat.Desktop.Models;
 using Wstat.Desktop.Services;
 using Wstat.Desktop.ViewModels;
+using Wstat.Desktop.Views;
 using Forms = System.Windows.Forms;
 
 namespace Wstat.Desktop;
@@ -108,6 +109,7 @@ public partial class App : System.Windows.Application
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Show Window", null, (_, _) => ShowMainWindow());
+        menu.Items.Add("Settings...", null, (_, _) => ShowSettingsWindow());
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => QuitApp());
 
@@ -205,6 +207,12 @@ public partial class App : System.Windows.Application
         _mainWindow.Show();
         _mainWindow.WindowState = WindowState.Normal;
         _mainWindow.Activate();
+    }
+
+    private void ShowSettingsWindow()
+    {
+        ShowMainWindow();
+        _viewModel?.ShowSettingsCommand?.Execute(null);
     }
 
     private void QuitApp()

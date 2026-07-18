@@ -96,6 +96,11 @@
                     Command="{Binding ClearProblematicCommand}"
                     Visibility="{Binding IsSpecificSelected, Converter={StaticResource BoolToVis}}"
                     Background="#FB8C00" Foreground="White"/>
+            <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,2"/>
+            <Button Content="⚙" Padding="8,4" Margin="2" Cursor="Hand"
+                    FontSize="16"
+                    Command="{Binding ShowSettingsCommand}"
+                    ToolTip="Settings"/>
         </StackPanel>
 
         <TabControl Grid.Row="2" SelectionChanged="TabControl_SelectionChanged">
