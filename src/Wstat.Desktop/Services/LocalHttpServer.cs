@@ -24,7 +24,7 @@ public class LocalHttpServer : IDisposable
     public LocalHttpServer(WindowTrackerService tracker)
     {
         _tracker = tracker;
-        _listener = new TcpListener(System.Net.IPAddress.Loopback, 12345);
+        _listener = new TcpListener(System.Net.IPAddress.Loopback, Settings.HttpPort);
     }
 
     public void Start()
@@ -33,7 +33,7 @@ public class LocalHttpServer : IDisposable
         {
             _listener.Start();
             _listenTask = ListenLoop(_cts.Token);
-            LogWriter.Write("[HttpServer] Server started on 127.0.0.1:12345");
+            LogWriter.Write("[HttpServer] Server started on 127.0.0.1:" + Settings.HttpPort);
         }
         catch (Exception ex)
         {

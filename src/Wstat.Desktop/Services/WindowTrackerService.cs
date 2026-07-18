@@ -10,9 +10,6 @@ namespace Wstat.Desktop.Services;
 
 public class WindowTrackerService : IDisposable
 {
-    private const int PollIntervalMs = 2000;
-    private const int IdleThresholdMs = 5 * 60 * 1000;
-
     private readonly DatabaseService _db;
     private readonly Timer _timer;
     private readonly object _stateLock = new();
@@ -35,13 +32,16 @@ public class WindowTrackerService : IDisposable
     public event Action<ActivityRecord>? RecordUpdated;
     public event Action<bool>? IdleStateChanged;
 
-    public ActivityRecord? CurrentRecord => _currentRecord;
+    public ActivityRecord? CurrentRecord
+    {
+        get { lock (_stateLock) { return _currentRecord; } }
+    }
     public bool IsIdle { get; private set; }
 
     public WindowTrackerService(DatabaseService db)
     {
         _db = db;
-        _timer = new Timer(PollIntervalMs) { AutoReset = false };
+        _timer = new Timer(Settings.PollIntervalMs) { AutoReset = false };
         _timer.Elapsed += OnTimerElapsed;
     }
 
@@ -106,14 +106,14 @@ public class WindowTrackerService : IDisposable
             var lastInputTick = Win32Api.GetLastInputTick();
             var nowTick = (uint)Environment.TickCount;
             var idleDuration = nowTick - lastInputTick;
-            var isIdle = idleDuration > IdleThresholdMs;
+            var isIdle = idleDuration > Settings.IdleThresholdMs;
 
             if (hWnd == IntPtr.Zero) return;
 
             if (_lastTick != 0)
             {
                 var elapsed = nowTick - _lastTick;
-                if (elapsed > PollIntervalMs * 10)
+                if (elapsed > Settings.PollIntervalMs * 10)
                 {
                     lock (_stateLock)
                     {
@@ -135,6 +135,7 @@ public class WindowTrackerService : IDisposable
             ActivityRecord? updatedRecord = null;
             bool idleStateChanged = false;
             bool idleEntered = false;
+            bool skipProcessing = false;
 
             lock (_stateLock)
             {
@@ -160,89 +161,90 @@ public class WindowTrackerService : IDisposable
                         _lastWindowTitle = windowTitle ?? "";
                         LogWriter.Write("[WindowTracker] IDLE exit path=" + appName);
                     }
-                    return;
+                    skipProcessing = true;
                 }
 
-                if (isIdle) return;
-
-                var processChanged = processPath != _lastProcessPath;
-
-                if (processChanged)
+                if (!skipProcessing && !isIdle)
                 {
-                    if (_pendingProcessPath == null)
-                    {
-                        _pendingProcessPath = processPath;
-                        _pendingWindowTitle = windowTitle ?? "";
-                        _pendingAppName = appName;
-                        _pendingCount = 1;
-                        LogWriter.Write("[WindowTracker] DEBOUNCE first-sight path=" + appName);
-                    }
-                    else if (processPath == _pendingProcessPath &&
-                             _pendingCount < 2)
-                    {
-                        _pendingCount++;
-                        LogWriter.Write("[WindowTracker] DEBOUNCE increment path=" + appName + " count=" + _pendingCount);
-                    }
-                    else if (processPath != _pendingProcessPath)
-                    {
-                        LogWriter.Write("[WindowTracker] DEBOUNCE third-process pending=" + _pendingAppName + " now=" + appName);
-                        CloseCurrentRecord();
-                        _pendingProcessPath = null;
-                        _pendingCount = 0;
-                        updatedRecord = StartNewRecord(processPath, windowTitle ?? "", appName);
-                        _lastProcessPath = processPath;
-                        _lastWindowTitle = windowTitle ?? "";
-                    }
+                    var processChanged = processPath != _lastProcessPath;
 
-                    if (_pendingProcessPath != null && _pendingCount >= 2)
+                    if (processChanged)
                     {
-                        LogWriter.Write("[WindowTracker] DEBOUNCE commit path=" + _pendingAppName);
-                        CloseCurrentRecord();
-                        updatedRecord = StartNewRecord(_pendingProcessPath, _pendingWindowTitle ?? "", _pendingAppName!);
-                        _lastProcessPath = _pendingProcessPath;
-                        _lastWindowTitle = _pendingWindowTitle ?? "";
-                        _pendingProcessPath = null;
-                        _pendingCount = 0;
-                    }
-
-                    if (_pendingProcessPath != null && _currentRecord != null)
-                    {
-                        _db.InsertOrUpdateActive(_currentRecord);
-                        updatedRecord = _currentRecord;
-                    }
-                }
-                else
-                {
-                    if (_pendingProcessPath != null)
-                    {
-                        LogWriter.Write("[WindowTracker] DEBOUNCE cancel path=" + _pendingAppName);
-                        _pendingProcessPath = null;
-                        _pendingCount = 0;
-                    }
-
-                    if (_currentRecord != null)
-                    {
-                        var titleChanged = (windowTitle ?? "") != _lastWindowTitle;
-                        if (titleChanged)
+                        if (_pendingProcessPath == null)
                         {
-                            _currentRecord.WindowTitle = windowTitle ?? "";
-                            var isFirefox = appName.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase);
-                            if (isFirefox && _latestBrowserUrl != null)
-                            {
-                                _currentRecord.BrowserUrl = _latestBrowserUrl;
-                                _currentRecord.WindowTitle = _latestBrowserTitle ?? windowTitle ?? "";
-                            }
+                            _pendingProcessPath = processPath;
+                            _pendingWindowTitle = windowTitle ?? "";
+                            _pendingAppName = appName;
+                            _pendingCount = 1;
+                            LogWriter.Write("[WindowTracker] DEBOUNCE first-sight path=" + appName);
+                        }
+                        else if (processPath == _pendingProcessPath &&
+                                 _pendingCount < 2)
+                        {
+                            _pendingCount++;
+                            LogWriter.Write("[WindowTracker] DEBOUNCE increment path=" + appName + " count=" + _pendingCount);
+                        }
+                        else if (processPath != _pendingProcessPath)
+                        {
+                            LogWriter.Write("[WindowTracker] DEBOUNCE third-process pending=" + _pendingAppName + " now=" + appName);
+                            CloseCurrentRecord();
+                            _pendingProcessPath = null;
+                            _pendingCount = 0;
+                            updatedRecord = StartNewRecord(processPath, windowTitle ?? "", appName);
+                            _lastProcessPath = processPath;
+                            _lastWindowTitle = windowTitle ?? "";
                         }
 
-                        _db.InsertOrUpdateActive(_currentRecord);
-                        updatedRecord = _currentRecord;
-                        _lastWindowTitle = windowTitle ?? "";
+                        if (_pendingProcessPath != null && _pendingCount >= 2)
+                        {
+                            LogWriter.Write("[WindowTracker] DEBOUNCE commit path=" + _pendingAppName);
+                            CloseCurrentRecord();
+                            updatedRecord = StartNewRecord(_pendingProcessPath, _pendingWindowTitle ?? "", _pendingAppName!);
+                            _lastProcessPath = _pendingProcessPath;
+                            _lastWindowTitle = _pendingWindowTitle ?? "";
+                            _pendingProcessPath = null;
+                            _pendingCount = 0;
+                        }
+
+                        if (_pendingProcessPath != null && _currentRecord != null)
+                        {
+                            _db.InsertOrUpdateActive(_currentRecord);
+                            updatedRecord = _currentRecord;
+                        }
                     }
-                    else if (_lastProcessPath != null)
+                    else
                     {
-                        updatedRecord = StartNewRecord(processPath, windowTitle ?? "", appName);
-                        _lastWindowTitle = windowTitle ?? "";
-                        LogWriter.Write("[WindowTracker] RECOVER restart=" + appName);
+                        if (_pendingProcessPath != null)
+                        {
+                            LogWriter.Write("[WindowTracker] DEBOUNCE cancel path=" + _pendingAppName);
+                            _pendingProcessPath = null;
+                            _pendingCount = 0;
+                        }
+
+                        if (_currentRecord != null)
+                        {
+                            var titleChanged = (windowTitle ?? "") != _lastWindowTitle;
+                            if (titleChanged)
+                            {
+                                _currentRecord.WindowTitle = windowTitle ?? "";
+                                var isFirefox = appName.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase);
+                                if (isFirefox && _latestBrowserUrl != null)
+                                {
+                                    _currentRecord.BrowserUrl = _latestBrowserUrl;
+                                    _currentRecord.WindowTitle = _latestBrowserTitle ?? windowTitle ?? "";
+                                }
+                            }
+
+                            _db.InsertOrUpdateActive(_currentRecord);
+                            updatedRecord = _currentRecord;
+                            _lastWindowTitle = windowTitle ?? "";
+                        }
+                        else if (_lastProcessPath != null)
+                        {
+                            updatedRecord = StartNewRecord(processPath, windowTitle ?? "", appName);
+                            _lastWindowTitle = windowTitle ?? "";
+                            LogWriter.Write("[WindowTracker] RECOVER restart=" + appName);
+                        }
                     }
                 }
             }

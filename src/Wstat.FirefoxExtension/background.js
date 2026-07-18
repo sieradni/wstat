@@ -1,4 +1,5 @@
-const SERVER_URL = "http://127.0.0.1:12345/tab";
+const PORT = 12345;
+const SERVER_URL = `http://127.0.0.1:${PORT}/tab`;
 
 function isHttpUrl(url) {
   return url && (url.startsWith("http://") || url.startsWith("https://"));

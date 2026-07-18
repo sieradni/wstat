@@ -274,19 +274,28 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Type,Name,TimeSeconds,DisplayTime,Details");
+            sb.AppendLine("Type,Name,TimeSeconds,DisplayTime,Details,StartTime,EndTime,ProcessPath");
 
             foreach (var app in Applications)
             {
                 var name = CsvEscape(app.AppName);
-                sb.AppendLine($"App,{name},{app.TotalSeconds},{app.DisplayTime},");
+                sb.AppendLine($"App,{name},{app.TotalSeconds},{app.DisplayTime},,,");
             }
 
             foreach (var url in TopUrls)
             {
                 var urlVal = CsvEscape(url.Url);
                 var titleVal = CsvEscape(url.Title);
-                sb.AppendLine($"Url,{urlVal},{url.TotalSeconds},{url.DisplayTime},{titleVal}");
+                sb.AppendLine($"Url,{urlVal},{url.TotalSeconds},{url.DisplayTime},{titleVal},,");
+            }
+
+            foreach (var entry in TimelineEntries)
+            {
+                var appName = CsvEscape(entry.AppName);
+                var windowTitle = CsvEscape(entry.WindowTitle);
+                var processPath = CsvEscape(entry.ProcessPath ?? "");
+                var displayTime = Formatting.FormatDuration(entry.DurationSeconds);
+                sb.AppendLine($"Timeline,{appName},{entry.DurationSeconds},{displayTime},{windowTitle},{entry.StartTime:O},{entry.EndTime:O},{processPath}");
             }
 
             File.WriteAllText(dialog.FileName, sb.ToString());

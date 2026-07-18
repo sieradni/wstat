@@ -7,7 +7,7 @@ namespace Wstat.Desktop.Services;
 public class DatabaseService : IDisposable
 {
     private readonly SqliteConnection _connection;
-    private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly ReaderWriterLockSlim _rwLock = new();
 
     public DatabaseService()
     {
@@ -52,7 +52,7 @@ public class DatabaseService : IDisposable
 
     public void InsertOrUpdateActive(ActivityRecord record)
     {
-        _writeLock.Wait();
+        _rwLock.EnterWriteLock();
         try
         {
             using var cmd = _connection.CreateCommand();
@@ -88,7 +88,7 @@ public class DatabaseService : IDisposable
         }
         finally
         {
-            _writeLock.Release();
+            _rwLock.ExitWriteLock();
         }
     }
 
@@ -99,7 +99,7 @@ public class DatabaseService : IDisposable
         record.EndTime = DateTime.Now;
         record.DurationSeconds = Math.Max(0, (int)(record.EndTime.Value - record.StartTime).TotalSeconds);
 
-        _writeLock.Wait();
+        _rwLock.EnterWriteLock();
         try
         {
             using var cmd = _connection.CreateCommand();
@@ -115,13 +115,13 @@ public class DatabaseService : IDisposable
         }
         finally
         {
-            _writeLock.Release();
+            _rwLock.ExitWriteLock();
         }
     }
 
     public void CloseOrphanedRecords()
     {
-        _writeLock.Wait();
+        _rwLock.EnterWriteLock();
         try
         {
             using var cmd = _connection.CreateCommand();
@@ -136,7 +136,7 @@ public class DatabaseService : IDisposable
         }
         finally
         {
-            _writeLock.Release();
+            _rwLock.ExitWriteLock();
         }
     }
 
@@ -145,7 +145,7 @@ public class DatabaseService : IDisposable
         var start = day.Date;
         var end = start.AddDays(1);
 
-        _writeLock.Wait();
+        _rwLock.EnterWriteLock();
         try
         {
             using var cmd = _connection.CreateCommand();
@@ -159,7 +159,7 @@ public class DatabaseService : IDisposable
         }
         finally
         {
-            _writeLock.Release();
+            _rwLock.ExitWriteLock();
         }
     }
 
@@ -168,7 +168,7 @@ public class DatabaseService : IDisposable
         var start = day.Date;
         var end = start.AddDays(1);
 
-        _writeLock.Wait();
+        _rwLock.EnterWriteLock();
         try
         {
             using var cmd = _connection.CreateCommand();
@@ -183,13 +183,13 @@ public class DatabaseService : IDisposable
         }
         finally
         {
-            _writeLock.Release();
+            _rwLock.ExitWriteLock();
         }
     }
 
     public void UpdateBrowserUrl(int recordId, string url)
     {
-        _writeLock.Wait();
+        _rwLock.EnterWriteLock();
         try
         {
             using var cmd = _connection.CreateCommand();
@@ -200,7 +200,7 @@ public class DatabaseService : IDisposable
         }
         finally
         {
-            _writeLock.Release();
+            _rwLock.ExitWriteLock();
         }
     }
 
@@ -209,7 +209,7 @@ public class DatabaseService : IDisposable
         var (start, end) = GetDateRange(filter, specificDate);
         var results = new List<AppSummary>();
 
-        _writeLock.Wait();
+        _rwLock.EnterReadLock();
         try
         {
             using var cmd = _connection.CreateCommand();
@@ -242,7 +242,7 @@ public class DatabaseService : IDisposable
         }
         finally
         {
-            _writeLock.Release();
+            _rwLock.ExitReadLock();
         }
 
         return results;
@@ -253,7 +253,7 @@ public class DatabaseService : IDisposable
         var (start, end) = GetDateRange(filter, specificDate);
         var results = new List<UrlSummary>();
 
-        _writeLock.Wait();
+        _rwLock.EnterReadLock();
         try
         {
             using var cmd = _connection.CreateCommand();
@@ -290,7 +290,7 @@ public class DatabaseService : IDisposable
         }
         finally
         {
-            _writeLock.Release();
+            _rwLock.ExitReadLock();
         }
 
         return results;
@@ -301,7 +301,7 @@ public class DatabaseService : IDisposable
         var (start, end) = GetDateRange(filter, specificDate);
         var results = new List<TimelineEntry>();
 
-        _writeLock.Wait();
+        _rwLock.EnterReadLock();
         try
         {
             using var cmd = _connection.CreateCommand();
@@ -335,7 +335,7 @@ public class DatabaseService : IDisposable
         }
         finally
         {
-            _writeLock.Release();
+            _rwLock.ExitReadLock();
         }
 
         return results;
@@ -361,7 +361,7 @@ public class DatabaseService : IDisposable
     {
         _connection?.Close();
         _connection?.Dispose();
-        _writeLock?.Dispose();
+        _rwLock?.Dispose();
     }
 }
 
