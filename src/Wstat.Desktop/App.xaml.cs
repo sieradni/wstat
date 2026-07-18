@@ -59,6 +59,14 @@ public partial class App : System.Windows.Application
         };
 
         var settings = SettingsManager.Load();
+
+        if (settings.AutoStartup)
+        {
+            var exePath = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exePath))
+                AutoStartupService.Enable(exePath);
+        }
+
         var services = new ServiceCollection();
         services.AddSingleton(settings);
         services.AddSingleton<IDatabaseService, DatabaseService>();

@@ -17,6 +17,7 @@ namespace Wstat.Desktop.ViewModels;
 public class DashboardViewModel : INotifyPropertyChanged, IDisposable
 {
     private static readonly Dictionary<string, BitmapSource?> IconCache = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxIconCacheSize = 64;
 
     private readonly IDatabaseService _db;
     private readonly DispatcherTimer _refreshTimer;
@@ -185,6 +186,8 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
                 BitmapSizeOptions.FromEmptyOptions());
 
             source.Freeze();
+            if (IconCache.Count >= MaxIconCacheSize)
+                IconCache.Clear();
             IconCache[processPath] = source;
             icon = source;
             return true;

@@ -145,7 +145,7 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
         }
     }
 
-    private Task ProcessTickAsync(string processPath, string windowTitle, string appName, bool isIdle)
+    internal Task ProcessTickAsync(string processPath, string windowTitle, string appName, bool isIdle)
     {
         ActivityRecord? updatedRecord = null;
         bool idleStateChanged = false;
