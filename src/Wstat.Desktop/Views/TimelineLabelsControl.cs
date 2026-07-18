@@ -45,7 +45,8 @@ public class TimelineLabelsControl : Canvas
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
-        try { RenderCore(dc); } catch { }
+        try { RenderCore(dc); }
+        catch (Exception ex) { LogWriter.Write("[TimelineLabels] Render error: " + ex.Message); }
     }
 
     private void RenderCore(DrawingContext dc)
@@ -83,7 +84,7 @@ public class TimelineLabelsControl : Canvas
                 textX = 24;
             }
         }
-        catch { }
+        catch (Exception ex) { LogWriter.Write("[TimelineLabels] Icon error: " + ex.Message); }
 
         var availableWidth = LabelWidth - textX - 4;
         if (availableWidth <= 0) return;

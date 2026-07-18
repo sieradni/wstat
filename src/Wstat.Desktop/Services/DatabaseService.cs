@@ -4,7 +4,7 @@ using Wstat.Desktop.Models;
 
 namespace Wstat.Desktop.Services;
 
-public class DatabaseService : IDisposable
+public class DatabaseService : IDatabaseService, IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly ReaderWriterLockSlim _rwLock = new();
@@ -43,7 +43,10 @@ public class DatabaseService : IDisposable
             alter.CommandText = "ALTER TABLE ActivityLog ADD COLUMN ProcessPath TEXT;";
             alter.ExecuteNonQuery();
         }
-        catch { }
+        catch
+        {
+            LogWriter.Write("[Schema] Column ProcessPath already exists (migration skipped)");
+        }
 
         using var idx = _connection.CreateCommand();
         idx.CommandText = "CREATE INDEX IF NOT EXISTS IX_ActivityLog_StartTime ON ActivityLog(StartTime);";

@@ -3,10 +3,11 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Wstat.Desktop.Common;
+using Wstat.Desktop.Models;
 
 namespace Wstat.Desktop.Services;
 
-public class LocalHttpServer : IDisposable
+public class LocalHttpServer : ILocalHttpServer, IDisposable
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -16,15 +17,17 @@ public class LocalHttpServer : IDisposable
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
     private readonly TcpListener _listener;
-    private readonly WindowTrackerService _tracker;
+    private readonly IWindowTrackerService _tracker;
+    private readonly SettingsModel _settings;
     private readonly CancellationTokenSource _cts = new();
     private Task? _listenTask;
     private bool _disposed;
 
-    public LocalHttpServer(WindowTrackerService tracker)
+    public LocalHttpServer(IWindowTrackerService tracker, SettingsModel settings)
     {
         _tracker = tracker;
-        _listener = new TcpListener(System.Net.IPAddress.Loopback, Settings.HttpPort);
+        _settings = settings;
+        _listener = new TcpListener(System.Net.IPAddress.Loopback, _settings.HttpPort);
     }
 
     public void Start()
@@ -33,7 +36,7 @@ public class LocalHttpServer : IDisposable
         {
             _listener.Start();
             _listenTask = ListenLoop(_cts.Token);
-            LogWriter.Write("[HttpServer] Server started on 127.0.0.1:" + Settings.HttpPort);
+            LogWriter.Write("[HttpServer] Server started on 127.0.0.1:" + _settings.HttpPort);
         }
         catch (Exception ex)
         {

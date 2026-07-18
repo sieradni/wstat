@@ -18,7 +18,7 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
 {
     private static readonly Dictionary<string, BitmapSource?> IconCache = new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly DatabaseService _db;
+    private readonly IDatabaseService _db;
     private readonly DispatcherTimer _refreshTimer;
     private DateFilter _selectedFilter = DateFilter.Today;
     private DateTime _specificDate = DateTime.Now.AddDays(-1);
@@ -80,7 +80,7 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     public event Action? TimelineUpdated;
     public event Action? ApplicationsUpdated;
 
-    public DashboardViewModel(DatabaseService db)
+    public DashboardViewModel(IDatabaseService db)
     {
         _db = db;
 
@@ -189,8 +189,9 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
             icon = source;
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            LogWriter.Write("[Icon] Extract error for " + processPath + ": " + ex.Message);
             IconCache[processPath] = null;
             return false;
         }

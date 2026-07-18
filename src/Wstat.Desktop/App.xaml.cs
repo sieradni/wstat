@@ -2,7 +2,9 @@
 using System.IO;
 using System.Threading;
 using System.Windows;
+using Microsoft.Extensions.DependencyInjection;
 using Wstat.Desktop.Common;
+using Wstat.Desktop.Models;
 using Wstat.Desktop.Services;
 using Wstat.Desktop.ViewModels;
 using Forms = System.Windows.Forms;
@@ -12,9 +14,9 @@ namespace Wstat.Desktop;
 public partial class App : System.Windows.Application
 {
     private static Mutex? _instanceMutex;
-    private DatabaseService? _db;
-    private WindowTrackerService? _tracker;
-    private LocalHttpServer? _httpServer;
+    private ServiceProvider? _serviceProvider;
+    private IWindowTrackerService? _tracker;
+    private ILocalHttpServer? _httpServer;
     private MainWindow? _mainWindow;
     private Forms.NotifyIcon? _trayIcon;
     private DashboardViewModel? _viewModel;
@@ -56,14 +58,22 @@ public partial class App : System.Windows.Application
             args.Handled = true;
         };
 
-        _db = new DatabaseService();
-        _tracker = new WindowTrackerService(_db);
-        _httpServer = new LocalHttpServer(_tracker);
+        var settings = SettingsManager.Load();
+        var services = new ServiceCollection();
+        services.AddSingleton(settings);
+        services.AddSingleton<IDatabaseService, DatabaseService>();
+        services.AddSingleton<IWindowTrackerService, WindowTrackerService>();
+        services.AddSingleton<ILocalHttpServer, LocalHttpServer>();
+        services.AddSingleton<DashboardViewModel>();
+        _serviceProvider = services.BuildServiceProvider();
+
+        _tracker = _serviceProvider.GetRequiredService<IWindowTrackerService>();
+        _httpServer = _serviceProvider.GetRequiredService<ILocalHttpServer>();
+        _viewModel = _serviceProvider.GetRequiredService<DashboardViewModel>();
 
         _tracker.Start();
         _httpServer.Start();
 
-        _viewModel = new DashboardViewModel(_db);
         _mainWindow = new MainWindow(_viewModel);
 
         _tracker.RecordUpdated += _ =>
@@ -199,11 +209,8 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _tracker?.Dispose();
-        _httpServer?.Dispose();
-        _viewModel?.Dispose();
-        if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
-        _db?.Dispose();
+        _trayIcon?.Dispose();
+        _serviceProvider?.Dispose();
         LogWriter.Shutdown();
         if (_instanceMutex != null)
         {

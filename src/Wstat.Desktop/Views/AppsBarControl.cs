@@ -50,7 +50,8 @@ public class AppsBarControl : Canvas
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
-        try { RenderCore(dc); } catch { }
+        try { RenderCore(dc); }
+        catch (Exception ex) { LogWriter.Write("[AppsBar] Render error: " + ex.Message); }
     }
 
     private void RenderCore(DrawingContext dc)
