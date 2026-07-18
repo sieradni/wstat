@@ -26,6 +26,7 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
     private string? _latestBrowserUrl;
     private string? _latestBrowserTitle;
     private uint _lastTick;
+    private int _consecutiveErrorCount;
 
     public event Action<ActivityRecord>? RecordUpdated;
     public event Action<bool>? IdleStateChanged;
@@ -128,17 +129,27 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
                         lock (_stateLock) { CloseCurrentRecord(); }
                     }
                 }
+
+                _consecutiveErrorCount = 0;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
-                LogWriter.Write("[WindowTracker] Poll error: " + ex.Message);
+                _consecutiveErrorCount++;
+                LogWriter.Write("[WindowTracker] Poll error (" + _consecutiveErrorCount + "): " + ex);
             }
 
             if (!_disposed && !ct.IsCancellationRequested)
             {
                 try
                 {
-                    await Task.Delay(_settings.PollIntervalMs, ct);
+                    var delay = _consecutiveErrorCount > 0
+                        ? Math.Min(_settings.PollIntervalMs * (1 << Math.Min(_consecutiveErrorCount, 4)), 30_000)
+                        : _settings.PollIntervalMs;
+                    await Task.Delay(delay, ct);
                 }
                 catch (OperationCanceledException) { break; }
             }

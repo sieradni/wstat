@@ -10,8 +10,13 @@ public class DatabaseService : IDatabaseService, IDisposable
     private readonly ReaderWriterLockSlim _rwLock = new();
 
     public DatabaseService()
+        : this($"Data Source={AppPaths.DbPath}")
     {
-        _connection = new SqliteConnection($"Data Source={AppPaths.DbPath}");
+    }
+
+    internal DatabaseService(string connectionString)
+    {
+        _connection = new SqliteConnection(connectionString);
         _connection.Open();
         InitializeSchema();
     }
@@ -127,14 +132,19 @@ public class DatabaseService : IDatabaseService, IDisposable
         _rwLock.EnterWriteLock();
         try
         {
+            var now = DateTime.Now;
+            var nowStr = now.ToString("O");
+            var nowJd = now.ToString("yyyy-MM-ddTHH:mm:ss");
+
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = """
                 UPDATE ActivityLog
                 SET EndTime = $now,
-                    DurationSeconds = CAST((julianday($now) - julianday(StartTime)) * 86400 AS INTEGER)
+                    DurationSeconds = MAX(1, CAST((julianday($nowJd) - julianday(substr(StartTime, 1, 19))) * 86400 AS INTEGER))
                 WHERE EndTime IS NULL;
                 """;
-            cmd.Parameters.AddWithValue("$now", DateTime.Now.ToString("O"));
+            cmd.Parameters.AddWithValue("$now", nowStr);
+            cmd.Parameters.AddWithValue("$nowJd", nowJd);
             cmd.ExecuteNonQuery();
         }
         finally

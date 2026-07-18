@@ -19,7 +19,7 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
     private readonly HttpListener _listener;
     private readonly IWindowTrackerService _tracker;
     private readonly SettingsModel _settings;
-    private readonly CancellationTokenSource _cts = new();
+    private CancellationTokenSource _cts = new();
     private Task? _listenTask;
     private bool _disposed;
 
@@ -35,6 +35,8 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
     {
         try
         {
+            if (_disposed) return;
+            _cts = new CancellationTokenSource();
             _listener.Start();
             _listenTask = ListenLoop(_cts.Token);
             LogWriter.Write("[HttpServer] Server started on 127.0.0.1:" + _settings.HttpPort);
@@ -75,7 +77,7 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
                 var preview = body.Length > 200 ? body[..200] + "..." : body;
                 LogWriter.Write("[HttpServer] Body (" + body.Length + " chars): " + preview);
 
-                var payload = JsonSerializer.Deserialize<TabPayload>(body, JsonOpts);
+                var payload = TryParseBody(body);
                 if (payload != null)
                 {
                     LogWriter.Write("[HttpServer] Calling SetBrowserTab(url=" + payload.Url + ", title=" + payload.Title + ")");
@@ -132,9 +134,24 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
         (_listener as IDisposable)?.Dispose();
     }
 
-    private sealed class TabPayload
+    internal sealed class TabPayload
     {
         public string? Url { get; set; }
         public string? Title { get; set; }
+    }
+
+    internal static TabPayload? TryParseBody(string body)
+    {
+        if (string.IsNullOrEmpty(body))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<TabPayload>(body, JsonOpts);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }
