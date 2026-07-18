@@ -1,7 +1,7 @@
 <Window x:Class="Wstat.Desktop.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="wstat Settings" Height="200" Width="380"
+        Title="wstat Settings" Height="370" Width="380"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False" ResizeMode="NoResize"
         WindowStyle="ToolWindow">
@@ -10,7 +10,19 @@
                    Margin="0,0,0,12"/>
         <CheckBox Content="Launch wstat when Windows starts"
                   IsChecked="{Binding AutoStartup}"
-                  Margin="0,0,0,24"/>
+                  Margin="0,0,0,16"/>
+        <TextBlock Text="HTTP Port (requires restart)" FontSize="11" Foreground="#666"
+                   Margin="0,0,0,2"/>
+        <TextBox Text="{Binding HttpPort}" Width="100" HorizontalAlignment="Left"
+                 Margin="0,0,0,8"/>
+        <TextBlock Text="Poll Interval (ms, min 500)" FontSize="11" Foreground="#666"
+                   Margin="0,0,0,2"/>
+        <TextBox Text="{Binding PollIntervalMs}" Width="100" HorizontalAlignment="Left"
+                 Margin="0,0,0,8"/>
+        <TextBlock Text="Idle Threshold (ms, min 10000)" FontSize="11" Foreground="#666"
+                   Margin="0,0,0,2"/>
+        <TextBox Text="{Binding IdleThresholdMs}" Width="100" HorizontalAlignment="Left"
+                 Margin="0,0,0,16"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="OK" Padding="20,6" Margin="0,0,8,0"
                     IsDefault="True"

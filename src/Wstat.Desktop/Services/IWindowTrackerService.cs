@@ -12,5 +12,6 @@ public interface IWindowTrackerService
 
     void Start();
     void Stop();
+    void ForceCloseCurrentRecord();
     void SetBrowserTab(string url, string title);
 }

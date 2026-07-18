@@ -22,29 +22,44 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
     private CancellationTokenSource _cts = new();
     private Task? _listenTask;
     private bool _disposed;
+    private int _actualPort;
+
+    public bool IsRunning => _listener.IsListening;
 
     public LocalHttpServer(IWindowTrackerService tracker, SettingsModel settings)
     {
         _tracker = tracker;
         _settings = settings;
         _listener = new HttpListener();
-        _listener.Prefixes.Add($"http://127.0.0.1:{_settings.HttpPort}/");
     }
 
     public void Start()
     {
-        try
+        if (_disposed) return;
+
+        var port = _settings.HttpPort;
+        var maxAttempts = 10;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
         {
-            if (_disposed) return;
-            _cts = new CancellationTokenSource();
-            _listener.Start();
-            _listenTask = ListenLoop(_cts.Token);
-            LogWriter.Write("[HttpServer] Server started on 127.0.0.1:" + _settings.HttpPort);
+            try
+            {
+                _cts = new CancellationTokenSource();
+                _listener.Prefixes.Clear();
+                _listener.Prefixes.Add($"http://127.0.0.1:{port + attempt}/");
+                _listener.Start();
+                _actualPort = port + attempt;
+                _listenTask = ListenLoop(_cts.Token);
+                LogWriter.Write("[HttpServer] Server started on 127.0.0.1:" + _actualPort);
+                return;
+            }
+            catch (Exception ex)
+            {
+                LogWriter.Write("[HttpServer] Failed to bind port " + (port + attempt) + ": " + ex.Message);
+            }
         }
-        catch (Exception ex)
-        {
-            LogWriter.Write("[HttpServer] FAILED to start: " + ex.Message);
-        }
+
+        LogWriter.Write("[HttpServer] FAILED to start after " + maxAttempts + " port attempts");
     }
 
     private async Task ListenLoop(CancellationToken ct)

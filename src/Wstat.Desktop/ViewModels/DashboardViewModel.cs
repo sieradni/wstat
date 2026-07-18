@@ -18,7 +18,10 @@ namespace Wstat.Desktop.ViewModels;
 public class DashboardViewModel : INotifyPropertyChanged, IDisposable
 {
     private static readonly Dictionary<string, BitmapSource?> IconCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly List<string> IconAccessOrder = [];
     private const int MaxIconCacheSize = 64;
+
+    private static readonly Dictionary<string, MediaColor> AppColorCache = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly IDatabaseService _db;
     private readonly SettingsModel _settings;
@@ -149,15 +152,14 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     private void LoadTimeline()
     {
         var raw = _db.GetTimeline(_selectedFilter, SpecificDateOrNull);
-        var colorIndex = new Dictionary<string, MediaColor>(StringComparer.OrdinalIgnoreCase);
-        var paletteIdx = 0;
+        var paletteIdx = AppColorCache.Count;
 
         foreach (var entry in raw)
         {
-            if (!colorIndex.TryGetValue(entry.AppName, out var color))
+            if (!AppColorCache.TryGetValue(entry.AppName, out var color))
             {
                 color = TimelineColors[paletteIdx % TimelineColors.Length];
-                colorIndex[entry.AppName] = color;
+                AppColorCache[entry.AppName] = color;
                 paletteIdx++;
             }
             entry.AppColor = color;
@@ -176,6 +178,8 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
 
         if (IconCache.TryGetValue(processPath, out var cached))
         {
+            IconAccessOrder.Remove(processPath);
+            IconAccessOrder.Add(processPath);
             icon = cached;
             return cached != null;
         }
@@ -192,8 +196,13 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
 
             source.Freeze();
             if (IconCache.Count >= MaxIconCacheSize)
-                IconCache.Clear();
+            {
+                var oldest = IconAccessOrder[0];
+                IconAccessOrder.RemoveAt(0);
+                IconCache.Remove(oldest);
+            }
             IconCache[processPath] = source;
+            IconAccessOrder.Add(processPath);
             icon = source;
             return true;
         }
@@ -201,6 +210,7 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         {
             LogWriter.Write("[Icon] Extract error for " + processPath + ": " + ex.Message);
             IconCache[processPath] = null;
+            IconAccessOrder.Add(processPath);
             return false;
         }
     }

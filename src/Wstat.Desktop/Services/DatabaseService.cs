@@ -8,6 +8,7 @@ public class DatabaseService : IDatabaseService, IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly ReaderWriterLockSlim _rwLock = new();
+    internal static IClock Clock { get; set; } = new SystemClock();
 
     public DatabaseService()
         : this($"Data Source={AppPaths.DbPath}")
@@ -180,6 +181,7 @@ public class DatabaseService : IDatabaseService, IDisposable
     {
         var start = day.Date;
         var end = start.AddDays(1);
+        var cutoff = Clock.Now.AddHours(-1);
 
         _rwLock.EnterWriteLock();
         try
@@ -188,10 +190,11 @@ public class DatabaseService : IDatabaseService, IDisposable
             cmd.CommandText = """
                 DELETE FROM ActivityLog
                 WHERE StartTime >= $start AND StartTime < $end
-                AND (DurationSeconds <= 0 OR EndTime IS NULL);
+                AND (DurationSeconds <= 0 OR (EndTime IS NULL AND StartTime < $cutoff));
                 """;
             cmd.Parameters.AddWithValue("$start", start.ToString("O"));
             cmd.Parameters.AddWithValue("$end", end.ToString("O"));
+            cmd.Parameters.AddWithValue("$cutoff", cutoff.ToString("O"));
             return cmd.ExecuteNonQuery();
         }
         finally
@@ -356,7 +359,7 @@ public class DatabaseService : IDatabaseService, IDisposable
 
     internal static (DateTime start, DateTime? end) GetDateRange(DateFilter filter, DateTime? specificDate = null)
     {
-        var now = DateTime.Now;
+        var now = Clock.Now;
         return filter switch
         {
             DateFilter.Today => (now.Date, null),

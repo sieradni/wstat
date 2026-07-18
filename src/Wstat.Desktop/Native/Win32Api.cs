@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Wstat.Desktop.Common;
 
 namespace Wstat.Desktop.Native;
 
@@ -109,9 +110,9 @@ internal static class Win32Api
         return 0;
     }
 
-    public static void ActivateExistingInstance(string windowTitle)
+    public static void ActivateExistingInstance()
     {
-        var hWnd = FindWindow(null, windowTitle);
+        var hWnd = FindWindow(null, Constants.WindowTitle);
         if (hWnd != IntPtr.Zero)
         {
             PostMessage(hWnd, WM_SHOW_APP, IntPtr.Zero, IntPtr.Zero);

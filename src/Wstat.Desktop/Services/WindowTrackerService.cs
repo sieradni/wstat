@@ -56,6 +56,11 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
         lock (_stateLock) { CloseCurrentRecord(); }
     }
 
+    public void ForceCloseCurrentRecord()
+    {
+        lock (_stateLock) { CloseCurrentRecord(); }
+    }
+
     public void SetBrowserTab(string url, string title)
     {
         ActivityRecord? updatedRecord = null;

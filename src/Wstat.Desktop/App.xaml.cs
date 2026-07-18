@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Win32;
 using Wstat.Desktop.Common;
 using Wstat.Desktop.Models;
 using Wstat.Desktop.Services;
@@ -28,14 +29,13 @@ public partial class App : System.Windows.Application
 
         LogWriter.Initialize();
 
-        const string mutexName = "Local\\Wstat_Desktop_App";
         bool createdNew;
-        _instanceMutex = new Mutex(true, mutexName, out createdNew);
+        _instanceMutex = new Mutex(true, Constants.MutexName, out createdNew);
 
         if (!createdNew)
         {
             _instanceMutex = null;
-            Native.Win32Api.ActivateExistingInstance("wstat \u2014 Screen Time Tracker");
+            Native.Win32Api.ActivateExistingInstance();
             Current.Shutdown();
             return;
         }
@@ -58,6 +58,8 @@ public partial class App : System.Windows.Application
             catch { }
             args.Handled = true;
         };
+
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
         var settings = SettingsManager.Load();
 
@@ -83,6 +85,11 @@ public partial class App : System.Windows.Application
         _tracker.Start();
         _httpServer.Start();
 
+        if (!_httpServer.IsRunning)
+        {
+            LogWriter.Write("[App] HTTP server failed to start on port " + settings.HttpPort);
+        }
+
         _mainWindow = new MainWindow(_viewModel);
 
         _tracker.RecordUpdated += _ =>
@@ -95,13 +102,27 @@ public partial class App : System.Windows.Application
         _mainWindow.Show();
     }
 
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        switch (e.Mode)
+        {
+            case PowerModes.Suspend:
+                LogWriter.Write("[App] System suspend detected");
+                _tracker?.ForceCloseCurrentRecord();
+                break;
+            case PowerModes.Resume:
+                LogWriter.Write("[App] System resume detected");
+                break;
+        }
+    }
+
     private void CreateTrayIcon()
     {
         var icon = CreateAndSaveIcon();
         _trayIcon = new Forms.NotifyIcon
         {
             Icon = icon,
-            Text = "wstat \u2014 Screen Time Tracker",
+            Text = Constants.WindowTitle,
             Visible = true
         };
 
