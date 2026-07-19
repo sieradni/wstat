@@ -12,8 +12,8 @@ public static class AutoStartupService
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(KeyPath, writable: true);
-            key?.SetValue(ValueName, executablePath);
+            using var key = Registry.CurrentUser.CreateSubKey(KeyPath);
+            key.SetValue(ValueName, executablePath);
             LogWriter.Write("[AutoStartup] Enabled: " + executablePath);
         }
         catch (Exception ex)
@@ -26,8 +26,8 @@ public static class AutoStartupService
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(KeyPath, writable: true);
-            key?.DeleteValue(ValueName, throwOnMissingValue: false);
+            using var key = Registry.CurrentUser.CreateSubKey(KeyPath);
+            key.DeleteValue(ValueName, throwOnMissingValue: false);
             LogWriter.Write("[AutoStartup] Disabled");
         }
         catch (Exception ex)

@@ -148,7 +148,9 @@ public class SettingsViewModel : INotifyPropertyChanged
         {
             AutoStartupService.Disable();
         }
-        SettingsManager.Save(_settings);
+
+        if (HasChanges)
+            SettingsManager.Save(_settings);
         LogWriter.Write("[Settings] Saved: AutoStartup=" + _autoStartup + ", Port=" + _settings.HttpPort + ", Poll=" + _settings.PollIntervalMs + ", Idle=" + _settings.IdleThresholdMs);
         RequestClose?.Invoke();
     }

@@ -180,133 +180,16 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
         ActivityRecord? updatedRecord = null;
         bool idleStateChanged = false;
         bool idleEntered = false;
-        bool skipProcessing = false;
 
         lock (_stateLock)
         {
             if (isIdle != _wasIdle)
             {
-                if (isIdle)
-                {
-                    CloseCurrentRecord();
-                    IsIdle = true;
-                    _wasIdle = true;
-                    idleStateChanged = true;
-                    idleEntered = true;
-                    LogWriter.Write("[WindowTracker] IDLE enter");
-                }
-                else
-                {
-                    IsIdle = false;
-                    _wasIdle = false;
-                    idleStateChanged = true;
-                    idleEntered = false;
-                    updatedRecord = StartNewRecord(processPath, windowTitle, appName);
-                    _lastProcessPath = processPath;
-                    _lastWindowTitle = windowTitle;
-                    LogWriter.Write("[WindowTracker] IDLE exit path=" + appName);
-                }
-                skipProcessing = true;
+                (idleStateChanged, idleEntered, updatedRecord) = HandleIdleTransition(isIdle, processPath, windowTitle, appName);
             }
-
-            if (!skipProcessing && !isIdle)
+            else if (!isIdle)
             {
-                var processChanged = processPath != _lastProcessPath;
-
-                if (processChanged)
-                {
-                    if (_pendingProcessPath == null)
-                    {
-                        _pendingProcessPath = processPath;
-                        _pendingWindowTitle = windowTitle;
-                        _pendingAppName = appName;
-                        _pendingCount = 1;
-                        LogWriter.Write("[WindowTracker] DEBOUNCE first-sight path=" + appName);
-                    }
-                    else if (processPath == _pendingProcessPath &&
-                             _pendingCount < 2)
-                    {
-                        _pendingCount++;
-                        LogWriter.Write("[WindowTracker] DEBOUNCE increment path=" + appName + " count=" + _pendingCount);
-                    }
-                    else if (processPath != _pendingProcessPath)
-                    {
-                        LogWriter.Write("[WindowTracker] DEBOUNCE third-process pending=" + _pendingAppName + " now=" + appName);
-                        CloseCurrentRecord();
-                        _pendingProcessPath = null;
-                        _pendingCount = 0;
-                        updatedRecord = StartNewRecord(processPath, windowTitle, appName);
-                        _lastProcessPath = processPath;
-                        _lastWindowTitle = windowTitle;
-                    }
-
-                    if (_pendingProcessPath != null && _pendingCount >= 2)
-                    {
-                        LogWriter.Write("[WindowTracker] DEBOUNCE commit path=" + _pendingAppName);
-                        CloseCurrentRecord();
-                        updatedRecord = StartNewRecord(_pendingProcessPath, _pendingWindowTitle ?? "", _pendingAppName!);
-                        _lastProcessPath = _pendingProcessPath;
-                        _lastWindowTitle = _pendingWindowTitle ?? "";
-                        _pendingProcessPath = null;
-                        _pendingCount = 0;
-                    }
-
-                    if (_pendingProcessPath != null && _currentRecord != null)
-                    {
-                        _db.InsertOrUpdateActive(_currentRecord);
-                        updatedRecord = _currentRecord;
-                    }
-                }
-                else
-                {
-                    if (_pendingProcessPath != null)
-                    {
-                        LogWriter.Write("[WindowTracker] DEBOUNCE cancel path=" + _pendingAppName);
-                        _pendingProcessPath = null;
-                        _pendingCount = 0;
-                    }
-
-                    if (_currentRecord != null)
-                    {
-                        var titleChanged = windowTitle != _lastWindowTitle;
-                        if (titleChanged)
-                        {
-                            _currentRecord.WindowTitle = windowTitle;
-                            var isFirefox = appName.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase);
-                            if (isFirefox && _latestBrowserUrl != null)
-                            {
-                                _currentRecord.BrowserUrl = _latestBrowserUrl;
-                                _currentRecord.WindowTitle = _latestBrowserTitle ?? windowTitle;
-                            }
-                        }
-
-                        if (titleChanged || _currentRecord.Id == 0)
-                        {
-                            _db.InsertOrUpdateActive(_currentRecord);
-                        }
-                        else
-                        {
-                            var elapsed = (int)(DateTime.Now - _currentRecord.StartTime).TotalSeconds;
-                            if (elapsed != _currentRecord.DurationSeconds)
-                            {
-                                _db.InsertOrUpdateActive(_currentRecord);
-                            }
-                            else if (_currentRecord.Id != 0 && _latestBrowserUrl != null &&
-                                     string.Equals(appName, "firefox.exe", StringComparison.OrdinalIgnoreCase))
-                            {
-                                _db.UpdateBrowserUrl(_currentRecord.Id, _latestBrowserUrl);
-                            }
-                        }
-                        updatedRecord = _currentRecord;
-                        _lastWindowTitle = windowTitle;
-                    }
-                    else if (_lastProcessPath != null)
-                    {
-                        updatedRecord = StartNewRecord(processPath, windowTitle, appName);
-                        _lastWindowTitle = windowTitle;
-                        LogWriter.Write("[WindowTracker] RECOVER restart=" + appName);
-                    }
-                }
+                updatedRecord = HandleActiveTick(processPath, windowTitle, appName);
             }
         }
 
@@ -317,6 +200,150 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
             RecordUpdated?.Invoke(updatedRecord);
 
         return Task.CompletedTask;
+    }
+
+    private (bool StateChanged, bool Entered, ActivityRecord? Record) HandleIdleTransition(
+        bool isIdle, string processPath, string windowTitle, string appName)
+    {
+        if (isIdle)
+        {
+            CloseCurrentRecord();
+            IsIdle = true;
+            _wasIdle = true;
+            LogWriter.Write("[WindowTracker] IDLE enter");
+            return (true, true, null);
+        }
+
+        IsIdle = false;
+        _wasIdle = false;
+        var record = StartNewRecord(processPath, windowTitle, appName);
+        _lastProcessPath = processPath;
+        _lastWindowTitle = windowTitle;
+        LogWriter.Write("[WindowTracker] IDLE exit path=" + appName);
+        return (true, false, record);
+    }
+
+    private ActivityRecord? HandleActiveTick(string processPath, string windowTitle, string appName)
+    {
+        return processPath != _lastProcessPath
+            ? HandleProcessSwitch(processPath, windowTitle, appName)
+            : HandleSameProcessTick(processPath, windowTitle, appName);
+    }
+
+    private ActivityRecord? HandleProcessSwitch(string processPath, string windowTitle, string appName)
+    {
+        if (_pendingProcessPath == null)
+        {
+            _pendingProcessPath = processPath;
+            _pendingWindowTitle = windowTitle;
+            _pendingAppName = appName;
+            _pendingCount = 1;
+            LogWriter.Write("[WindowTracker] DEBOUNCE first-sight path=" + appName);
+            return TryPersistDuringDebounce();
+        }
+
+        if (processPath == _pendingProcessPath && _pendingCount < 2)
+        {
+            _pendingCount++;
+            LogWriter.Write("[WindowTracker] DEBOUNCE increment path=" + appName + " count=" + _pendingCount);
+            return TryCommitDebounce() ?? TryPersistDuringDebounce();
+        }
+
+        if (processPath != _pendingProcessPath)
+        {
+            LogWriter.Write("[WindowTracker] DEBOUNCE third-process pending=" + _pendingAppName + " now=" + appName);
+            CloseCurrentRecord();
+            _pendingProcessPath = null;
+            _pendingCount = 0;
+            var record = StartNewRecord(processPath, windowTitle, appName);
+            _lastProcessPath = processPath;
+            _lastWindowTitle = windowTitle;
+            return record;
+        }
+
+        return TryCommitDebounce();
+    }
+
+    private ActivityRecord? TryCommitDebounce()
+    {
+        if (_pendingProcessPath == null || _pendingCount < 2)
+            return null;
+
+        LogWriter.Write("[WindowTracker] DEBOUNCE commit path=" + _pendingAppName);
+        CloseCurrentRecord();
+        var record = StartNewRecord(_pendingProcessPath, _pendingWindowTitle ?? "", _pendingAppName!);
+        _lastProcessPath = _pendingProcessPath;
+        _lastWindowTitle = _pendingWindowTitle ?? "";
+        _pendingProcessPath = null;
+        _pendingCount = 0;
+        return record;
+    }
+
+    private ActivityRecord? TryPersistDuringDebounce()
+    {
+        if (_pendingProcessPath != null && _currentRecord != null)
+        {
+            _db.InsertOrUpdateActive(_currentRecord);
+            return _currentRecord;
+        }
+
+        return null;
+    }
+
+    private ActivityRecord? HandleSameProcessTick(string processPath, string windowTitle, string appName)
+    {
+        if (_pendingProcessPath != null)
+        {
+            LogWriter.Write("[WindowTracker] DEBOUNCE cancel path=" + _pendingAppName);
+            _pendingProcessPath = null;
+            _pendingCount = 0;
+        }
+
+        if (_currentRecord != null)
+        {
+            var titleChanged = windowTitle != _lastWindowTitle;
+            if (titleChanged)
+            {
+                _currentRecord.WindowTitle = windowTitle;
+                var isFirefox = appName.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase);
+                if (isFirefox && _latestBrowserUrl != null)
+                {
+                    _currentRecord.BrowserUrl = _latestBrowserUrl;
+                    _currentRecord.WindowTitle = _latestBrowserTitle ?? windowTitle;
+                }
+            }
+
+            if (titleChanged || _currentRecord.Id == 0)
+            {
+                _db.InsertOrUpdateActive(_currentRecord);
+            }
+            else
+            {
+                var elapsed = (int)(DateTime.Now - _currentRecord.StartTime).TotalSeconds;
+                if (elapsed != _currentRecord.DurationSeconds)
+                {
+                    _db.InsertOrUpdateActive(_currentRecord);
+                }
+                else if (_currentRecord.Id != 0 && _latestBrowserUrl != null &&
+                         string.Equals(appName, "firefox.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    _db.UpdateBrowserUrl(_currentRecord.Id, _latestBrowserUrl);
+                }
+            }
+
+            _lastWindowTitle = windowTitle;
+            return _currentRecord;
+        }
+
+        if (_lastProcessPath != null)
+        {
+            var record = StartNewRecord(processPath, windowTitle, appName);
+            _lastWindowTitle = windowTitle;
+            LogWriter.Write("[WindowTracker] RECOVER restart=" + appName);
+            return record;
+        }
+
+        return null;
     }
 
     private ActivityRecord? StartNewRecord(string processPath, string windowTitle, string appName)

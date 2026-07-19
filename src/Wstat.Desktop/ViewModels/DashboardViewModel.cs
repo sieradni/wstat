@@ -17,8 +17,14 @@ namespace Wstat.Desktop.ViewModels;
 
 public class DashboardViewModel : INotifyPropertyChanged, IDisposable
 {
-    private static readonly Dictionary<string, BitmapSource?> IconCache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly List<string> IconAccessOrder = [];
+    private sealed class IconCacheEntry
+    {
+        public BitmapSource? Icon;
+        public LinkedListNode<string>? Node;
+    }
+
+    private static readonly Dictionary<string, IconCacheEntry> IconCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly LinkedList<string> IconAccessOrder = [];
     private const int MaxIconCacheSize = 64;
 
     private static readonly Dictionary<string, MediaColor> AppColorCache = new(StringComparer.OrdinalIgnoreCase);
@@ -176,12 +182,11 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         if (string.IsNullOrEmpty(processPath) || !File.Exists(processPath))
             return false;
 
-        if (IconCache.TryGetValue(processPath, out var cached))
+        if (IconCache.TryGetValue(processPath, out var entry) && entry.Icon != null)
         {
-            IconAccessOrder.Remove(processPath);
-            IconAccessOrder.Add(processPath);
-            icon = cached;
-            return cached != null;
+            TouchEntry(entry, processPath);
+            icon = entry.Icon;
+            return true;
         }
 
         try
@@ -195,24 +200,43 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
                 BitmapSizeOptions.FromEmptyOptions());
 
             source.Freeze();
+
             if (IconCache.Count >= MaxIconCacheSize)
             {
-                var oldest = IconAccessOrder[0];
-                IconAccessOrder.RemoveAt(0);
-                IconCache.Remove(oldest);
+                var oldestNode = IconAccessOrder.First;
+                if (oldestNode != null)
+                {
+                    IconCache.Remove(oldestNode.Value);
+                    IconAccessOrder.RemoveFirst();
+                }
             }
-            IconCache[processPath] = source;
-            IconAccessOrder.Add(processPath);
+
+            var newEntry = new IconCacheEntry { Icon = source };
+            newEntry.Node = IconAccessOrder.AddLast(processPath);
+            IconCache[processPath] = newEntry;
             icon = source;
             return true;
         }
         catch (Exception ex)
         {
             LogWriter.Write("[Icon] Extract error for " + processPath + ": " + ex.Message);
-            IconCache[processPath] = null;
-            IconAccessOrder.Add(processPath);
+
+            if (!IconCache.TryGetValue(processPath, out var failedEntry))
+            {
+                failedEntry = new IconCacheEntry();
+                failedEntry.Node = IconAccessOrder.AddLast(processPath);
+                IconCache[processPath] = failedEntry;
+            }
+
             return false;
         }
+    }
+
+    private static void TouchEntry(IconCacheEntry entry, string processPath)
+    {
+        if (entry.Node != null)
+            IconAccessOrder.Remove(entry.Node);
+        entry.Node = IconAccessOrder.AddLast(processPath);
     }
 
     private static BitmapSource? GetOrLoadIcon(string? processPath)

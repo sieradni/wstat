@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Wstat.Desktop.Common;
 using Wstat.Desktop.Models;
@@ -148,7 +149,7 @@ public class DatabaseService : IDatabaseService, IDisposable
                 {
                     orphans.Add((
                         reader.GetInt32(0),
-                        DateTime.Parse(reader.GetString(1)),
+                        DateTime.ParseExact(reader.GetString(1), "O", CultureInfo.InvariantCulture),
                         reader.GetInt32(2)
                     ));
                 }
@@ -361,8 +362,8 @@ public class DatabaseService : IDatabaseService, IDisposable
                 {
                     AppName = reader.GetString(0),
                     WindowTitle = reader.GetString(1),
-                    StartTime = DateTime.Parse(reader.GetString(2)),
-                    EndTime = DateTime.Parse(reader.GetString(3)),
+                    StartTime = DateTime.ParseExact(reader.GetString(2), "O", CultureInfo.InvariantCulture),
+                    EndTime = DateTime.ParseExact(reader.GetString(3), "O", CultureInfo.InvariantCulture),
                     DurationSeconds = reader.GetInt32(4),
                     ProcessPath = reader.IsDBNull(5) ? null : reader.GetString(5)
                 });
