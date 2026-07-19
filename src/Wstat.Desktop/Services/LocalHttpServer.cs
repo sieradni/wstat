@@ -19,7 +19,7 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
     private readonly HttpListener _listener;
     private readonly IWindowTrackerService _tracker;
     private readonly SettingsModel _settings;
-    private CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _cts;
     private Task? _listenTask;
     private bool _disposed;
     private int _actualPort;
@@ -44,6 +44,8 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
         {
             try
             {
+                _cts?.Cancel();
+                _cts?.Dispose();
                 _cts = new CancellationTokenSource();
                 _listener.Prefixes.Clear();
                 _listener.Prefixes.Add($"http://127.0.0.1:{port + attempt}/");
@@ -136,7 +138,12 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
 
     public void Stop()
     {
-        _cts.Cancel();
+        if (_cts != null)
+        {
+            _cts.Cancel();
+            _cts.Dispose();
+            _cts = null;
+        }
         try { _listener.Stop(); } catch { }
     }
 
@@ -145,7 +152,7 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
         if (_disposed) return;
         _disposed = true;
         Stop();
-        _cts.Dispose();
+        _cts?.Dispose();
         (_listener as IDisposable)?.Dispose();
     }
 

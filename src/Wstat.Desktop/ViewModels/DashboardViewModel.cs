@@ -285,6 +285,15 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         var window = new SettingsWindow(vm);
         window.Owner = System.Windows.Application.Current.MainWindow;
         window.ShowDialog();
+
+        if (vm.RestartRequired)
+        {
+            System.Windows.MessageBox.Show(
+                "Changed settings (HTTP port, poll interval, idle threshold) will take effect after restarting wstat.",
+                "Restart Required",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
     }
 
     private void ExportCsv()

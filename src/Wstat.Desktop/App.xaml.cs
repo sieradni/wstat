@@ -73,6 +73,7 @@ public partial class App : System.Windows.Application
 
         var services = new ServiceCollection();
         services.AddSingleton(settings);
+        services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IDatabaseService, DatabaseService>();
         services.AddSingleton<IWindowTrackerService, WindowTrackerService>();
         services.AddSingleton<ILocalHttpServer, LocalHttpServer>();

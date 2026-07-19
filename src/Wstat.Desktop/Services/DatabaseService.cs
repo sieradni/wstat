@@ -8,17 +8,23 @@ public class DatabaseService : IDatabaseService, IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly ReaderWriterLockSlim _rwLock = new();
-    internal static IClock Clock { get; set; } = new SystemClock();
+    private readonly IClock _clock;
 
-    public DatabaseService()
-        : this($"Data Source={AppPaths.DbPath}")
+    public DatabaseService(IClock clock)
+        : this($"Data Source={AppPaths.DbPath}", clock)
     {
     }
 
     internal DatabaseService(string connectionString)
+        : this(connectionString, new SystemClock())
+    {
+    }
+
+    internal DatabaseService(string connectionString, IClock clock)
     {
         _connection = new SqliteConnection(connectionString);
         _connection.Open();
+        _clock = clock;
         InitializeSchema();
     }
 
@@ -194,7 +200,7 @@ public class DatabaseService : IDatabaseService, IDisposable
     {
         var start = day.Date;
         var end = start.AddDays(1);
-        var cutoff = Clock.Now.AddHours(-1);
+        var cutoff = _clock.Now.AddHours(-1);
 
         _rwLock.EnterWriteLock();
         try
@@ -370,9 +376,9 @@ public class DatabaseService : IDatabaseService, IDisposable
         return results;
     }
 
-    internal static (DateTime start, DateTime? end) GetDateRange(DateFilter filter, DateTime? specificDate = null)
+    internal (DateTime start, DateTime? end) GetDateRange(DateFilter filter, DateTime? specificDate = null)
     {
-        var now = Clock.Now;
+        var now = _clock.Now;
         return filter switch
         {
             DateFilter.Today => (now.Date, null),

@@ -318,7 +318,7 @@ public class DatabaseServiceTests : IDisposable
     [Fact]
     public void GetDateRange_Today_returns_correct_bounds()
     {
-        var (start, end) = DatabaseService.GetDateRange(DateFilter.Today);
+        var (start, end) = _sut.GetDateRange(DateFilter.Today);
 
         start.Should().Be(DateTime.Today);
         end.Should().BeNull();
@@ -327,7 +327,7 @@ public class DatabaseServiceTests : IDisposable
     [Fact]
     public void GetDateRange_Yesterday_returns_correct_bounds()
     {
-        var (start, end) = DatabaseService.GetDateRange(DateFilter.Yesterday);
+        var (start, end) = _sut.GetDateRange(DateFilter.Yesterday);
 
         start.Should().Be(DateTime.Today.AddDays(-1));
         end.Should().Be(DateTime.Today);
@@ -336,7 +336,7 @@ public class DatabaseServiceTests : IDisposable
     [Fact]
     public void GetDateRange_Last7Days_returns_correct_bounds()
     {
-        var (start, end) = DatabaseService.GetDateRange(DateFilter.Last7Days);
+        var (start, end) = _sut.GetDateRange(DateFilter.Last7Days);
 
         start.Should().Be(DateTime.Today.AddDays(-6));
         end.Should().Be(DateTime.Today.AddDays(1));
@@ -345,7 +345,7 @@ public class DatabaseServiceTests : IDisposable
     [Fact]
     public void GetDateRange_Last30Days_returns_correct_bounds()
     {
-        var (start, end) = DatabaseService.GetDateRange(DateFilter.Last30Days);
+        var (start, end) = _sut.GetDateRange(DateFilter.Last30Days);
 
         start.Should().Be(DateTime.Today.AddDays(-29));
         end.Should().Be(DateTime.Today.AddDays(1));
@@ -355,7 +355,7 @@ public class DatabaseServiceTests : IDisposable
     public void GetDateRange_Specific_uses_provided_date()
     {
         var specific = new DateTime(2026, 6, 15);
-        var (start, end) = DatabaseService.GetDateRange(DateFilter.Specific, specific);
+        var (start, end) = _sut.GetDateRange(DateFilter.Specific, specific);
 
         start.Should().Be(specific.Date);
         end.Should().Be(specific.Date.AddDays(1));

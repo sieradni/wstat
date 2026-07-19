@@ -6,6 +6,7 @@ using Wstat.Desktop.Services;
 
 namespace Wstat.Desktop.Tests;
 
+[Collection("AppPaths")]
 public class SettingsManagerTests : IDisposable
 {
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "wstat_test_" + Guid.NewGuid());
@@ -93,5 +94,22 @@ public class SettingsManagerTests : IDisposable
         loaded.PollIntervalMs.Should().Be(2000);
         loaded.IdleThresholdMs.Should().Be(300_000);
         loaded.AutoStartup.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LogWriter_rotates_when_exceeding_size_limit()
+    {
+        LogWriter.Shutdown();
+        const long tenMb = 10 * 1024 * 1024;
+        File.WriteAllText(AppPaths.LogPath, new string('x', (int)tenMb + 1));
+
+        LogWriter.Initialize();
+
+        File.Exists(AppPaths.LogPath).Should().BeTrue();
+        File.Exists(AppPaths.LogPath + ".1").Should().BeTrue();
+        new FileInfo(AppPaths.LogPath + ".1").Length.Should().BeGreaterThan(tenMb);
+        new FileInfo(AppPaths.LogPath).Length.Should().BeLessThan(1024);
+
+        LogWriter.Shutdown();
     }
 }
