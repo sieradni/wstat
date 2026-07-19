@@ -60,6 +60,7 @@ public partial class App : System.Windows.Application
         };
 
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        SystemEvents.SessionEnded += OnSessionEnded;
 
         var settings = SettingsManager.Load();
 
@@ -114,6 +115,12 @@ public partial class App : System.Windows.Application
                 LogWriter.Write("[App] System resume detected");
                 break;
         }
+    }
+
+    private void OnSessionEnded(object sender, SessionEndedEventArgs e)
+    {
+        LogWriter.Write("[App] Session ended (shutdown/logoff): " + e.Reason);
+        _tracker?.ForceCloseCurrentRecord();
     }
 
     private void CreateTrayIcon()

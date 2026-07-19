@@ -26,6 +26,7 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
     private string? _latestBrowserUrl;
     private string? _latestBrowserTitle;
     private uint _lastTick;
+    private DateTime _lastWallTime;
     private int _consecutiveErrorCount;
 
     public event Action<ActivityRecord>? RecordUpdated;
@@ -121,8 +122,21 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
                                 LogWriter.Write("[WindowTracker] GAP detected: " + elapsed + "ms since last tick (sleep/resume/DST)");
                             }
                         }
+                        else
+                        {
+                            var wallElapsed = (DateTime.UtcNow - _lastWallTime).TotalMilliseconds;
+                            if (wallElapsed > _settings.PollIntervalMs * 10)
+                            {
+                                lock (_stateLock)
+                                {
+                                    CloseCurrentRecord();
+                                    LogWriter.Write("[WindowTracker] WALL GAP detected: " + wallElapsed + "ms (sleep/resume)");
+                                }
+                            }
+                        }
                     }
                     _lastTick = nowTick;
+                    _lastWallTime = DateTime.UtcNow;
 
                     if (!string.IsNullOrEmpty(processPath))
                     {

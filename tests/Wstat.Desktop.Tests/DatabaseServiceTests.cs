@@ -132,13 +132,14 @@ public class DatabaseServiceTests : IDisposable
     }
 
     [Fact]
-    public void CloseOrphanedRecords_closes_records_with_null_endtime()
+    public void CloseOrphanedRecords_caps_zero_duration_to_1s()
     {
+        var start = DateTime.Now.AddMinutes(-30);
         var record = new ActivityRecord
         {
             AppName = "orphan.exe",
             WindowTitle = "Orphaned",
-            StartTime = DateTime.Now.AddMinutes(-30)
+            StartTime = start
         };
         _sut.InsertOrUpdateActive(record);
         record.Id.Should().BeGreaterThan(0);
@@ -148,12 +149,47 @@ public class DatabaseServiceTests : IDisposable
         var apps = _sut.GetAppSummary(DateFilter.Today);
         apps.Should().ContainSingle(a => a.AppName == "orphan.exe");
         var app = apps.Single(a => a.AppName == "orphan.exe");
-        app.TotalSeconds.Should().BeInRange(1780, 1820);
+        app.TotalSeconds.Should().Be(1);
 
         var timeline = _sut.GetTimeline(DateFilter.Today);
         timeline.Should().ContainSingle(e => e.AppName == "orphan.exe");
         var entry = timeline.Single(e => e.AppName == "orphan.exe");
-        entry.EndTime.Should().BeCloseTo(DateTime.Now, TimeSpan.FromSeconds(5));
+        entry.DurationSeconds.Should().Be(1);
+        entry.EndTime.Should().Be(start.AddSeconds(1));
+    }
+
+    [Fact]
+    public void CloseOrphanedRecords_preserves_existing_duration()
+    {
+        var start = DateTime.Now.AddMinutes(-30);
+        var record = new ActivityRecord
+        {
+            AppName = "existing.exe",
+            WindowTitle = "Existing",
+            StartTime = start
+        };
+        _sut.InsertOrUpdateActive(record);
+
+        using (var directConn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            directConn.Open();
+            using var updateCmd = directConn.CreateCommand();
+            updateCmd.CommandText = "UPDATE ActivityLog SET DurationSeconds = 120 WHERE Id = $id;";
+            updateCmd.Parameters.AddWithValue("$id", record.Id);
+            updateCmd.ExecuteNonQuery();
+        }
+
+        _sut.CloseOrphanedRecords();
+
+        var apps = _sut.GetAppSummary(DateFilter.Today);
+        apps.Should().ContainSingle(a => a.AppName == "existing.exe");
+        var app = apps.Single(a => a.AppName == "existing.exe");
+        app.TotalSeconds.Should().Be(120);
+
+        var timeline = _sut.GetTimeline(DateFilter.Today);
+        var entry = timeline.Single(e => e.AppName == "existing.exe");
+        entry.DurationSeconds.Should().Be(120);
+        entry.EndTime.Should().Be(start.AddSeconds(120));
     }
 
     [Fact]

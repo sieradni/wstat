@@ -133,20 +133,33 @@ public class DatabaseService : IDatabaseService, IDisposable
         _rwLock.EnterWriteLock();
         try
         {
-            var now = DateTime.Now;
-            var nowStr = now.ToString("O");
-            var nowJd = now.ToString("yyyy-MM-ddTHH:mm:ss");
+            var orphans = new List<(int id, DateTime startTime, int durationSeconds)>();
+            using (var selectCmd = _connection.CreateCommand())
+            {
+                selectCmd.CommandText = "SELECT Id, StartTime, DurationSeconds FROM ActivityLog WHERE EndTime IS NULL;";
+                using var reader = selectCmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    orphans.Add((
+                        reader.GetInt32(0),
+                        DateTime.Parse(reader.GetString(1)),
+                        reader.GetInt32(2)
+                    ));
+                }
+            }
 
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = """
-                UPDATE ActivityLog
-                SET EndTime = $now,
-                    DurationSeconds = MAX(1, CAST((julianday($nowJd) - julianday(substr(StartTime, 1, 19))) * 86400 AS INTEGER))
-                WHERE EndTime IS NULL;
-                """;
-            cmd.Parameters.AddWithValue("$now", nowStr);
-            cmd.Parameters.AddWithValue("$nowJd", nowJd);
-            cmd.ExecuteNonQuery();
+            foreach (var (id, startTime, durationSeconds) in orphans)
+            {
+                var finalDuration = durationSeconds > 0 ? durationSeconds : 1;
+                var endTime = startTime.AddSeconds(finalDuration);
+
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = "UPDATE ActivityLog SET EndTime = $endTime, DurationSeconds = $duration WHERE Id = $id;";
+                cmd.Parameters.AddWithValue("$endTime", endTime.ToString("O"));
+                cmd.Parameters.AddWithValue("$duration", finalDuration);
+                cmd.Parameters.AddWithValue("$id", id);
+                cmd.ExecuteNonQuery();
+            }
         }
         finally
         {
