@@ -61,9 +61,17 @@ public class DatabaseService : IDatabaseService, IDisposable
             LogWriter.Write("[Schema] Column ProcessPath already exists (migration skipped)");
         }
 
-        using var idx = _connection.CreateCommand();
-        idx.CommandText = "CREATE INDEX IF NOT EXISTS IX_ActivityLog_StartTime ON ActivityLog(StartTime);";
-        idx.ExecuteNonQuery();
+        using var idx1 = _connection.CreateCommand();
+        idx1.CommandText = "CREATE INDEX IF NOT EXISTS IX_ActivityLog_StartTime ON ActivityLog(StartTime);";
+        idx1.ExecuteNonQuery();
+
+        using var idx2 = _connection.CreateCommand();
+        idx2.CommandText = "CREATE INDEX IF NOT EXISTS IX_ActivityLog_AppName ON ActivityLog(AppName, StartTime);";
+        idx2.ExecuteNonQuery();
+
+        using var idx3 = _connection.CreateCommand();
+        idx3.CommandText = "CREATE INDEX IF NOT EXISTS IX_ActivityLog_BrowserUrl ON ActivityLog(BrowserUrl, StartTime);";
+        idx3.ExecuteNonQuery();
     }
 
     public void InsertOrUpdateActive(ActivityRecord record)

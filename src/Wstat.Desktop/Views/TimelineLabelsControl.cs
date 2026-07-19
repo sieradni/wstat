@@ -4,7 +4,9 @@ using System.Windows.Media;
 using MediaBrush = System.Windows.Media.Brush;
 using MediaColor = System.Windows.Media.Color;
 using WinSize = System.Windows.Size;
+using Microsoft.Extensions.DependencyInjection;
 using Wstat.Desktop.Common;
+using Wstat.Desktop.Services;
 
 namespace Wstat.Desktop.Views;
 
@@ -78,10 +80,15 @@ public class TimelineLabelsControl : Canvas
                 .Select(e => e.ProcessPath)
                 .FirstOrDefault(p => !string.IsNullOrEmpty(p) && System.IO.File.Exists(p));
 
-            if (procPath != null && ViewModels.DashboardViewModel.TryGetIcon(procPath, out var icon))
+            if (procPath != null)
             {
-                dc.DrawImage(icon, new System.Windows.Rect(4, y + (RowHeight - 16) / 2, 16, 16));
-                textX = 24;
+                var iconService = App.ServiceProvider?.GetService(typeof(IIconService)) as IIconService;
+                var icon = iconService?.GetIcon(procPath);
+                if (icon != null)
+                {
+                    dc.DrawImage(icon, new System.Windows.Rect(4, y + (RowHeight - 16) / 2, 16, 16));
+                    textX = 24;
+                }
             }
         }
         catch (Exception ex) { LogWriter.Write("[TimelineLabels] Icon error: " + ex.Message); }

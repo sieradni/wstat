@@ -11,6 +11,14 @@ insert_final_newline = true
 [*.{cs,csproj,sln}]
 indent_size = 4
 
+[*.{js,mjs}]
+indent_style = space
+indent_size = 2
+
+[*.json]
+indent_style = space
+indent_size = 2
+
 [*.cs]
 csharp_new_line_before_open_brace = all
 csharp_new_line_before_else = true

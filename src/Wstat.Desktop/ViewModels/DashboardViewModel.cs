@@ -5,9 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Data;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using MediaColor = System.Windows.Media.Color;
 using Wstat.Desktop.Common;
 using Wstat.Desktop.Models;
 using Wstat.Desktop.Services;
@@ -17,19 +15,8 @@ namespace Wstat.Desktop.ViewModels;
 
 public class DashboardViewModel : INotifyPropertyChanged, IDisposable
 {
-    private sealed class IconCacheEntry
-    {
-        public BitmapSource? Icon;
-        public LinkedListNode<string>? Node;
-    }
-
-    private static readonly Dictionary<string, IconCacheEntry> IconCache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly LinkedList<string> IconAccessOrder = [];
-    private const int MaxIconCacheSize = 64;
-
-    private static readonly Dictionary<string, MediaColor> AppColorCache = new(StringComparer.OrdinalIgnoreCase);
-
     private readonly IDatabaseService _db;
+    private readonly IIconService _iconService;
     private readonly SettingsModel _settings;
     private readonly DispatcherTimer _refreshTimer;
     private DateFilter _selectedFilter = DateFilter.Today;
@@ -93,9 +80,10 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     public event Action? TimelineUpdated;
     public event Action? ApplicationsUpdated;
 
-    public DashboardViewModel(IDatabaseService db, SettingsModel settings)
+    public DashboardViewModel(IDatabaseService db, IIconService iconService, SettingsModel settings)
     {
         _db = db;
+        _iconService = iconService;
         _settings = settings;
 
         FilterTodayCommand = new RelayCommand(() => SelectedFilter = DateFilter.Today);
@@ -141,7 +129,7 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         Applications.Clear();
         foreach (var app in apps)
         {
-            app.Icon = GetOrLoadIcon(app.ProcessPath);
+            app.Icon = _iconService.GetIcon(app.ProcessPath);
             Applications.Add(app);
         }
         ApplicationsUpdated?.Invoke();
@@ -158,116 +146,17 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
     private void LoadTimeline()
     {
         var raw = _db.GetTimeline(_selectedFilter, SpecificDateOrNull);
-        var paletteIdx = AppColorCache.Count;
 
         foreach (var entry in raw)
         {
-            if (!AppColorCache.TryGetValue(entry.AppName, out var color))
-            {
-                color = TimelineColors[paletteIdx % TimelineColors.Length];
-                AppColorCache[entry.AppName] = color;
-                paletteIdx++;
-            }
-            entry.AppColor = color;
-            entry.TitleColor = Lighten(color, 0.15);
+            entry.AppColor = _iconService.GetOrAssignAppColor(entry.AppName);
         }
 
         TimelineEntries = raw;
         TimelineUpdated?.Invoke();
     }
 
-    public static bool TryGetIcon(string? processPath, out BitmapSource? icon)
-    {
-        icon = null;
-        if (string.IsNullOrEmpty(processPath) || !File.Exists(processPath))
-            return false;
 
-        if (IconCache.TryGetValue(processPath, out var entry) && entry.Icon != null)
-        {
-            TouchEntry(entry, processPath);
-            icon = entry.Icon;
-            return true;
-        }
-
-        try
-        {
-            using var sysIcon = System.Drawing.Icon.ExtractAssociatedIcon(processPath);
-            if (sysIcon == null) return false;
-
-            var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
-                sysIcon.Handle,
-                System.Windows.Int32Rect.Empty,
-                BitmapSizeOptions.FromEmptyOptions());
-
-            source.Freeze();
-
-            if (IconCache.Count >= MaxIconCacheSize)
-            {
-                var oldestNode = IconAccessOrder.First;
-                if (oldestNode != null)
-                {
-                    IconCache.Remove(oldestNode.Value);
-                    IconAccessOrder.RemoveFirst();
-                }
-            }
-
-            var newEntry = new IconCacheEntry { Icon = source };
-            newEntry.Node = IconAccessOrder.AddLast(processPath);
-            IconCache[processPath] = newEntry;
-            icon = source;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LogWriter.Write("[Icon] Extract error for " + processPath + ": " + ex.Message);
-
-            if (!IconCache.TryGetValue(processPath, out var failedEntry))
-            {
-                failedEntry = new IconCacheEntry();
-                failedEntry.Node = IconAccessOrder.AddLast(processPath);
-                IconCache[processPath] = failedEntry;
-            }
-
-            return false;
-        }
-    }
-
-    private static void TouchEntry(IconCacheEntry entry, string processPath)
-    {
-        if (entry.Node != null)
-            IconAccessOrder.Remove(entry.Node);
-        entry.Node = IconAccessOrder.AddLast(processPath);
-    }
-
-    private static BitmapSource? GetOrLoadIcon(string? processPath)
-    {
-        TryGetIcon(processPath, out var icon);
-        return icon;
-    }
-
-    private static MediaColor Lighten(MediaColor color, double amount)
-    {
-        return MediaColor.FromRgb(
-            (byte)Math.Min(255, color.R + 255 * amount),
-            (byte)Math.Min(255, color.G + 255 * amount),
-            (byte)Math.Min(255, color.B + 255 * amount));
-    }
-
-    private static readonly MediaColor[] TimelineColors =
-    [
-        MediaColor.FromRgb(0x42, 0x85, 0xF4),
-        MediaColor.FromRgb(0xEA, 0x43, 0x35),
-        MediaColor.FromRgb(0x34, 0xA8, 0x53),
-        MediaColor.FromRgb(0xFB, 0xBC, 0x04),
-        MediaColor.FromRgb(0xAB, 0x47, 0xBC),
-        MediaColor.FromRgb(0x00, 0x96, 0x88),
-        MediaColor.FromRgb(0xFF, 0x6F, 0x00),
-        MediaColor.FromRgb(0x8E, 0x24, 0xAA),
-        MediaColor.FromRgb(0x00, 0x89, 0x4B),
-        MediaColor.FromRgb(0xE9, 0x1E, 0x63),
-        MediaColor.FromRgb(0x00, 0x76, 0xD4),
-        MediaColor.FromRgb(0x6D, 0x4C, 0x41),
-    ];
 
     private void ClearDay()
     {

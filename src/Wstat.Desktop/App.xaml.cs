@@ -14,6 +14,7 @@ namespace Wstat.Desktop;
 public partial class App : System.Windows.Application
 {
     private static Mutex? _instanceMutex;
+    internal static ServiceProvider? ServiceProvider { get; private set; }
     private ServiceProvider? _serviceProvider;
     private IWindowTrackerService? _tracker;
     private ILocalHttpServer? _httpServer;
@@ -75,8 +76,10 @@ public partial class App : System.Windows.Application
         services.AddSingleton<IDatabaseService, DatabaseService>();
         services.AddSingleton<IWindowTrackerService, WindowTrackerService>();
         services.AddSingleton<ILocalHttpServer, LocalHttpServer>();
+        services.AddSingleton<IIconService, IconService>();
         services.AddSingleton<DashboardViewModel>();
         _serviceProvider = services.BuildServiceProvider();
+        ServiceProvider = _serviceProvider;
 
         _tracker = _serviceProvider.GetRequiredService<IWindowTrackerService>();
         _httpServer = _serviceProvider.GetRequiredService<ILocalHttpServer>();

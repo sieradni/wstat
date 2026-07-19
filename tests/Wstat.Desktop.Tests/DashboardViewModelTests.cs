@@ -10,6 +10,7 @@ namespace Wstat.Desktop.Tests;
 public class DashboardViewModelTests
 {
     private readonly IDatabaseService _db = Substitute.For<IDatabaseService>();
+    private readonly IIconService _iconService = Substitute.For<IIconService>();
     private readonly SettingsModel _settings = new();
 
     public DashboardViewModelTests()
@@ -28,7 +29,7 @@ public class DashboardViewModelTests
         DashboardViewModel vm = null!;
         StaRunner.Run(() =>
         {
-            vm = new DashboardViewModel(_db, _settings);
+            vm = new DashboardViewModel(_db, _iconService, _settings);
         });
 
         _db.Received(1).GetAppSummary(DateFilter.Today, Arg.Any<DateTime?>());
@@ -42,7 +43,7 @@ public class DashboardViewModelTests
         DashboardViewModel vm = null!;
         StaRunner.Run(() =>
         {
-            vm = new DashboardViewModel(_db, _settings);
+            vm = new DashboardViewModel(_db, _iconService, _settings);
             vm.FilterYesterdayCommand.Execute(null);
             _db.ClearReceivedCalls();
             vm.FilterTodayCommand.Execute(null);
@@ -57,7 +58,7 @@ public class DashboardViewModelTests
         DashboardViewModel vm = null!;
         StaRunner.Run(() =>
         {
-            vm = new DashboardViewModel(_db, _settings);
+            vm = new DashboardViewModel(_db, _iconService, _settings);
             _db.ClearReceivedCalls();
             vm.FilterYesterdayCommand.Execute(null);
         });
@@ -71,7 +72,7 @@ public class DashboardViewModelTests
         DashboardViewModel vm = null!;
         StaRunner.Run(() =>
         {
-            vm = new DashboardViewModel(_db, _settings);
+            vm = new DashboardViewModel(_db, _iconService, _settings);
             _db.ClearReceivedCalls();
             vm.FilterLast7DaysCommand.Execute(null);
         });
@@ -85,7 +86,7 @@ public class DashboardViewModelTests
         DashboardViewModel vm = null!;
         StaRunner.Run(() =>
         {
-            vm = new DashboardViewModel(_db, _settings);
+            vm = new DashboardViewModel(_db, _iconService, _settings);
             _db.ClearReceivedCalls();
             vm.FilterLast30DaysCommand.Execute(null);
         });
@@ -100,7 +101,7 @@ public class DashboardViewModelTests
         DashboardViewModel vm = null!;
         StaRunner.Run(() =>
         {
-            vm = new DashboardViewModel(_db, _settings);
+            vm = new DashboardViewModel(_db, _iconService, _settings);
             vm.SpecificDate = specificDate;
             _db.ClearReceivedCalls();
             vm.FilterSpecificCommand.Execute(null);
@@ -115,7 +116,7 @@ public class DashboardViewModelTests
         DashboardViewModel vm = null!;
         StaRunner.Run(() =>
         {
-            vm = new DashboardViewModel(_db, _settings);
+            vm = new DashboardViewModel(_db, _iconService, _settings);
         });
 
         vm.IsTodaySelected.Should().BeTrue();
@@ -131,7 +132,7 @@ public class DashboardViewModelTests
         DashboardViewModel vm = null!;
         StaRunner.Run(() =>
         {
-            vm = new DashboardViewModel(_db, _settings);
+            vm = new DashboardViewModel(_db, _iconService, _settings);
             _db.ClearReceivedCalls();
             vm.RefreshSummary();
         });
