@@ -9,6 +9,7 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
 {
     private readonly IDatabaseService _db;
     private readonly SettingsModel _settings;
+    private readonly IWin32Api _win32;
     private readonly object _stateLock = new();
     private CancellationTokenSource? _cts;
 
@@ -38,10 +39,11 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
     }
     public bool IsIdle { get; private set; }
 
-    public WindowTrackerService(IDatabaseService db, SettingsModel settings)
+    public WindowTrackerService(IDatabaseService db, SettingsModel settings, IWin32Api win32)
     {
         _db = db;
         _settings = settings;
+        _win32 = win32;
     }
 
     public void Start()
@@ -78,7 +80,7 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
             }
 
             if (_currentRecord != null && !_wasIdle &&
-                string.Equals(_currentRecord.AppName, "firefox.exe", StringComparison.OrdinalIgnoreCase))
+                string.Equals(_currentRecord.AppName, Constants.FirefoxExe, StringComparison.OrdinalIgnoreCase))
             {
                 _currentRecord.BrowserUrl = url;
                 _currentRecord.WindowTitle = title;
@@ -101,10 +103,10 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
         {
             try
             {
-                var hWnd = Win32Api.GetForegroundWindow();
-                var processPath = Win32Api.GetForegroundProcessPath();
-                var windowTitle = Win32Api.GetForegroundWindowTitle();
-                var lastInputTick = Win32Api.GetLastInputTick();
+                var hWnd = _win32.GetForegroundWindow();
+                var processPath = _win32.GetForegroundProcessPath();
+                var windowTitle = _win32.GetForegroundWindowTitle();
+                var lastInputTick = _win32.GetLastInputTick();
                 var nowTick = (uint)Environment.TickCount;
                 var idleDuration = nowTick - lastInputTick;
                 var isIdle = idleDuration > _settings.IdleThresholdMs;
@@ -305,7 +307,7 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
             if (titleChanged)
             {
                 _currentRecord.WindowTitle = windowTitle;
-                var isFirefox = appName.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase);
+                var isFirefox = appName.Equals(Constants.FirefoxExe, StringComparison.OrdinalIgnoreCase);
                 if (isFirefox && _latestBrowserUrl != null)
                 {
                     _currentRecord.BrowserUrl = _latestBrowserUrl;
@@ -325,7 +327,7 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
                     _db.InsertOrUpdateActive(_currentRecord);
                 }
                 else if (_currentRecord.Id != 0 && _latestBrowserUrl != null &&
-                         string.Equals(appName, "firefox.exe", StringComparison.OrdinalIgnoreCase))
+                         string.Equals(appName, Constants.FirefoxExe, StringComparison.OrdinalIgnoreCase))
                 {
                     _db.UpdateBrowserUrl(_currentRecord.Id, _latestBrowserUrl);
                 }
@@ -349,7 +351,7 @@ public class WindowTrackerService : IWindowTrackerService, IDisposable
     private ActivityRecord? StartNewRecord(string processPath, string windowTitle, string appName)
     {
         var appNameLower = appName.ToLowerInvariant();
-        var isFirefox = appNameLower == "firefox.exe";
+        var isFirefox = appNameLower == Constants.FirefoxExe;
 
         _currentRecord = new ActivityRecord
         {

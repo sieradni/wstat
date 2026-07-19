@@ -48,7 +48,7 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
                 _cts?.Dispose();
                 _cts = new CancellationTokenSource();
                 _listener.Prefixes.Clear();
-                _listener.Prefixes.Add($"http://127.0.0.1:{port + attempt}/");
+                _listener.Prefixes.Add($"{Constants.LocalhostPrefix}{port + attempt}/");
                 _listener.Start();
                 _actualPort = port + attempt;
                 _listenTask = ListenLoop(_cts.Token);
@@ -87,7 +87,7 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
             timeoutCts.CancelAfter(RequestTimeout);
             ct = timeoutCts.Token;
 
-            if (ctx.Request.HttpMethod == "POST" && ctx.Request.Url?.AbsolutePath == "/tab")
+            if (ctx.Request.HttpMethod == "POST" && ctx.Request.Url?.AbsolutePath == Constants.TabEndpoint)
             {
                 using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
                 var body = await reader.ReadToEndAsync(ct);
@@ -116,9 +116,9 @@ public class LocalHttpServer : ILocalHttpServer, IDisposable
             {
                 status = ctx.Response.StatusCode switch
                 {
-                    200 => "ok",
-                    400 => "bad request",
-                    _ => "not found"
+                    200 => Constants.StatusOk,
+                    400 => Constants.StatusBadRequest,
+                    _ => Constants.StatusNotFound
                 }
             });
             var buffer = Encoding.UTF8.GetBytes(responseBody);

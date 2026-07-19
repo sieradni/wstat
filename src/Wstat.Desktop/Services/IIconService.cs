@@ -6,5 +6,6 @@ namespace Wstat.Desktop.Services;
 public interface IIconService
 {
     BitmapSource? GetIcon(string? processPath);
+    Task<BitmapSource?> GetIconAsync(string? processPath);
     MediaColor GetOrAssignAppColor(string appName);
 }

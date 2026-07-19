@@ -2,6 +2,7 @@ using FluentAssertions;
 using NSubstitute;
 using Xunit;
 using Wstat.Desktop.Models;
+using Wstat.Desktop.Native;
 using Wstat.Desktop.Services;
 
 #pragma warning disable CA2000
@@ -11,6 +12,7 @@ namespace Wstat.Desktop.Tests;
 public class WindowTrackerServiceTests : IDisposable
 {
     private readonly IDatabaseService _db = Substitute.For<IDatabaseService>();
+    private readonly IWin32Api _win32 = Substitute.For<IWin32Api>();
     private readonly SettingsModel _settings = new();
     private readonly WindowTrackerService _sut;
     private readonly List<ActivityRecord> _recordUpdates = [];
@@ -19,7 +21,7 @@ public class WindowTrackerServiceTests : IDisposable
 
     public WindowTrackerServiceTests()
     {
-        _sut = new WindowTrackerService(_db, _settings);
+        _sut = new WindowTrackerService(_db, _settings, _win32);
         _sut.RecordUpdated += r => _recordUpdates.Add(r);
         _sut.IdleStateChanged += i => _idleChanges.Add(i);
 

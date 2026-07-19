@@ -1,10 +1,11 @@
-﻿using System.IO;
+using System.IO;
 using System.Threading;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using Wstat.Desktop.Common;
 using Wstat.Desktop.Models;
+using Wstat.Desktop.Native;
 using Wstat.Desktop.Services;
 using Wstat.Desktop.ViewModels;
 using Wstat.Desktop.Views;
@@ -73,6 +74,7 @@ public partial class App : System.Windows.Application
         var services = new ServiceCollection();
         services.AddSingleton(settings);
         services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<IWin32Api, Win32ApiService>();
         services.AddSingleton<IDatabaseService, DatabaseService>();
         services.AddSingleton<IWindowTrackerService, WindowTrackerService>();
         services.AddSingleton<ILocalHttpServer, LocalHttpServer>();

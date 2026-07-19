@@ -150,13 +150,14 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         foreach (var entry in raw)
         {
             entry.AppColor = _iconService.GetOrAssignAppColor(entry.AppName);
+            entry.TitleColor = entry.AppColor;
+            if (!string.IsNullOrEmpty(entry.ProcessPath))
+                entry.Icon = _iconService.GetIcon(entry.ProcessPath);
         }
 
         TimelineEntries = raw;
         TimelineUpdated?.Invoke();
     }
-
-
 
     private void ClearDay()
     {

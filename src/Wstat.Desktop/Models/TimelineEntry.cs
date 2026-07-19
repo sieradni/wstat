@@ -1,3 +1,4 @@
+using System.Windows.Media.Imaging;
 using MediaColor = System.Windows.Media.Color;
 
 namespace Wstat.Desktop.Models;
@@ -12,4 +13,5 @@ public class TimelineEntry
     public int DurationSeconds { get; set; }
     public MediaColor AppColor { get; set; }
     public MediaColor TitleColor { get; set; }
+    public BitmapSource? Icon { get; set; }
 }

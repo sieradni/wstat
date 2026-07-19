@@ -35,6 +35,11 @@ public class IconService : IIconService
         MediaColor.FromRgb(0x6D, 0x4C, 0x41),
     ];
 
+    public Task<BitmapSource?> GetIconAsync(string? processPath)
+    {
+        return Task.Run(() => GetIcon(processPath));
+    }
+
     public BitmapSource? GetIcon(string? processPath)
     {
         if (string.IsNullOrEmpty(processPath) || !File.Exists(processPath))

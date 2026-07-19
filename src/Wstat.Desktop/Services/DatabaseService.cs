@@ -92,14 +92,14 @@ public class DatabaseService : IDatabaseService, IDisposable
                 cmd.Parameters.AddWithValue("$windowTitle", record.WindowTitle);
                 cmd.Parameters.AddWithValue("$browserUrl", (object?)record.BrowserUrl ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("$processPath", (object?)record.ProcessPath ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("$startTime", record.StartTime.ToString("O"));
+                cmd.Parameters.AddWithValue("$startTime", record.StartTime.ToString(Constants.IsoFormat));
 
                 var result = cmd.ExecuteScalar();
                 record.Id = Convert.ToInt32(result);
             }
             else
             {
-                var elapsed = (int)(DateTime.Now - record.StartTime).TotalSeconds;
+                var elapsed = (int)(_clock.Now - record.StartTime).TotalSeconds;
                 cmd.CommandText = """
                     UPDATE ActivityLog
                     SET DurationSeconds = $duration
@@ -120,7 +120,7 @@ public class DatabaseService : IDatabaseService, IDisposable
     {
         if (record.Id == 0) return;
 
-        record.EndTime = DateTime.Now;
+        record.EndTime = _clock.Now;
         record.DurationSeconds = Math.Max(0, (int)(record.EndTime.Value - record.StartTime).TotalSeconds);
 
         _rwLock.EnterWriteLock();
@@ -132,7 +132,7 @@ public class DatabaseService : IDatabaseService, IDisposable
                 SET EndTime = $endTime, DurationSeconds = $duration
                 WHERE Id = $id;
                 """;
-            cmd.Parameters.AddWithValue("$endTime", record.EndTime.Value.ToString("O"));
+            cmd.Parameters.AddWithValue("$endTime", record.EndTime.Value.ToString(Constants.IsoFormat));
             cmd.Parameters.AddWithValue("$duration", record.DurationSeconds);
             cmd.Parameters.AddWithValue("$id", record.Id);
             cmd.ExecuteNonQuery();
@@ -157,7 +157,7 @@ public class DatabaseService : IDatabaseService, IDisposable
                 {
                     orphans.Add((
                         reader.GetInt32(0),
-                        DateTime.ParseExact(reader.GetString(1), "O", CultureInfo.InvariantCulture),
+                        DateTime.ParseExact(reader.GetString(1), Constants.IsoFormat, CultureInfo.InvariantCulture),
                         reader.GetInt32(2)
                     ));
                 }
@@ -170,7 +170,7 @@ public class DatabaseService : IDatabaseService, IDisposable
 
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText = "UPDATE ActivityLog SET EndTime = $endTime, DurationSeconds = $duration WHERE Id = $id;";
-                cmd.Parameters.AddWithValue("$endTime", endTime.ToString("O"));
+                cmd.Parameters.AddWithValue("$endTime", endTime.ToString(Constants.IsoFormat));
                 cmd.Parameters.AddWithValue("$duration", finalDuration);
                 cmd.Parameters.AddWithValue("$id", id);
                 cmd.ExecuteNonQuery();
@@ -195,8 +195,8 @@ public class DatabaseService : IDatabaseService, IDisposable
                 DELETE FROM ActivityLog
                 WHERE StartTime >= $start AND StartTime < $end;
                 """;
-            cmd.Parameters.AddWithValue("$start", start.ToString("O"));
-            cmd.Parameters.AddWithValue("$end", end.ToString("O"));
+            cmd.Parameters.AddWithValue("$start", start.ToString(Constants.IsoFormat));
+            cmd.Parameters.AddWithValue("$end", end.ToString(Constants.IsoFormat));
             return cmd.ExecuteNonQuery();
         }
         finally
@@ -220,9 +220,9 @@ public class DatabaseService : IDatabaseService, IDisposable
                 WHERE StartTime >= $start AND StartTime < $end
                 AND (DurationSeconds <= 0 OR (EndTime IS NULL AND StartTime < $cutoff));
                 """;
-            cmd.Parameters.AddWithValue("$start", start.ToString("O"));
-            cmd.Parameters.AddWithValue("$end", end.ToString("O"));
-            cmd.Parameters.AddWithValue("$cutoff", cutoff.ToString("O"));
+            cmd.Parameters.AddWithValue("$start", start.ToString(Constants.IsoFormat));
+            cmd.Parameters.AddWithValue("$end", end.ToString(Constants.IsoFormat));
+            cmd.Parameters.AddWithValue("$cutoff", cutoff.ToString(Constants.IsoFormat));
             return cmd.ExecuteNonQuery();
         }
         finally
@@ -270,8 +270,8 @@ public class DatabaseService : IDatabaseService, IDisposable
                 GROUP BY a.AppName
                 ORDER BY TotalSeconds DESC;
                 """;
-            cmd.Parameters.AddWithValue("$start", start.ToString("O"));
-            cmd.Parameters.AddWithValue("$end", (object?)end?.ToString("O") ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$start", start.ToString(Constants.IsoFormat));
+            cmd.Parameters.AddWithValue("$end", (object?)end?.ToString(Constants.IsoFormat) ?? DBNull.Value);
 
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -317,8 +317,8 @@ public class DatabaseService : IDatabaseService, IDisposable
                 GROUP BY a.BrowserUrl
                 ORDER BY TotalSeconds DESC;
                 """;
-            cmd.Parameters.AddWithValue("$start", start.ToString("O"));
-            cmd.Parameters.AddWithValue("$end", (object?)end?.ToString("O") ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$start", start.ToString(Constants.IsoFormat));
+            cmd.Parameters.AddWithValue("$end", (object?)end?.ToString(Constants.IsoFormat) ?? DBNull.Value);
 
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -359,9 +359,9 @@ public class DatabaseService : IDatabaseService, IDisposable
                 AND (DurationSeconds > 0 OR EndTime IS NULL)
                 ORDER BY StartTime ASC;
                 """;
-            cmd.Parameters.AddWithValue("$start", start.ToString("O"));
-            cmd.Parameters.AddWithValue("$end", (object?)end?.ToString("O") ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("$now", DateTime.Now.ToString("O"));
+            cmd.Parameters.AddWithValue("$start", start.ToString(Constants.IsoFormat));
+            cmd.Parameters.AddWithValue("$end", (object?)end?.ToString(Constants.IsoFormat) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$now", _clock.Now.ToString(Constants.IsoFormat));
 
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -370,8 +370,8 @@ public class DatabaseService : IDatabaseService, IDisposable
                 {
                     AppName = reader.GetString(0),
                     WindowTitle = reader.GetString(1),
-                    StartTime = DateTime.ParseExact(reader.GetString(2), "O", CultureInfo.InvariantCulture),
-                    EndTime = DateTime.ParseExact(reader.GetString(3), "O", CultureInfo.InvariantCulture),
+                    StartTime = DateTime.ParseExact(reader.GetString(2), Constants.IsoFormat, CultureInfo.InvariantCulture),
+                    EndTime = DateTime.ParseExact(reader.GetString(3), Constants.IsoFormat, CultureInfo.InvariantCulture),
                     DurationSeconds = reader.GetInt32(4),
                     ProcessPath = reader.IsDBNull(5) ? null : reader.GetString(5)
                 });
