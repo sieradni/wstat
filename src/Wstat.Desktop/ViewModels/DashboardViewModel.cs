@@ -159,6 +159,14 @@ public class DashboardViewModel : INotifyPropertyChanged, IDisposable
         TimelineUpdated?.Invoke();
     }
 
+    public void DeleteEntries(List<int> ids)
+    {
+        if (ids.Count == 0) return;
+        var count = _db.DeleteRecordsByIds(ids);
+        LogWriter.Write($"[Delete] Deleted {count} records by Ids");
+        LoadAll();
+    }
+
     private void ClearDay()
     {
         if (_selectedFilter != DateFilter.Specific) return;

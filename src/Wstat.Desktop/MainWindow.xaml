@@ -123,6 +123,10 @@
             </TabItem>
             <TabItem Header="Timeline">
                 <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="140"/>
                         <ColumnDefinition Width="*"/>
@@ -138,7 +142,14 @@
                                   HorizontalScrollBarVisibility="Auto"
                                   PreviewMouseWheel="BarsScroller_PreviewMouseWheel"
                                   ScrollChanged="BarsScroller_ScrollChanged">
-                        <views:TimelineControl x:Name="timelineControl" />
+                        <views:TimelineControl x:Name="timelineControl">
+                            <views:TimelineControl.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem x:Name="deleteMenuItem" Header="Delete"
+                                              Click="DeleteSelected_Click"/>
+                                </ContextMenu>
+                            </views:TimelineControl.ContextMenu>
+                        </views:TimelineControl>
                     </ScrollViewer>
                     <GridSplitter Grid.Column="0" Width="5" ResizeDirection="Columns"
                                   HorizontalAlignment="Right" Background="Transparent"/>
@@ -150,6 +161,35 @@
                                        TextWrapping="Wrap" />
                         </Border>
                     </Popup>
+                    <Border Grid.Row="1" Grid.ColumnSpan="2"
+                            Background="#F5F5F5" BorderBrush="#DDD" BorderThickness="0,1,0,0"
+                            Padding="8,4" Visibility="Collapsed" x:Name="selectionInfoBar">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="selectionCountText" FontSize="11"
+                                       VerticalAlignment="Center" Foreground="#555"/>
+                            <TextBlock Grid.Column="1" FontSize="11"
+                                       VerticalAlignment="Center" Foreground="#555"
+                                       TextAlignment="Center">
+                                <Run x:Name="selectionTotalTimeLabel" Text="Total: "/>
+                                <Run x:Name="selectionTotalTimeValue" Foreground="#333" FontWeight="SemiBold"/>
+                                <Run Text="  |  "/>
+                                <Run x:Name="selectionActiveTimeLabel" Text="Active: "/>
+                                <Run x:Name="selectionActiveTimeValue" Foreground="#333" FontWeight="SemiBold"/>
+                            </TextBlock>
+                            <Button Grid.Column="1" HorizontalAlignment="Right"
+                                    x:Name="clearSelectionButton"
+                                    Content="✕" FontSize="11" Padding="4,1"
+                                    BorderThickness="1" BorderBrush="#CCC"
+                                    Background="Transparent" Foreground="#888"
+                                    ToolTip="Clear selection"
+                                    Cursor="Hand" Click="ClearSelection_Click"/>
+                        </Grid>
+                    </Border>
                 </Grid>
             </TabItem>
         </TabControl>

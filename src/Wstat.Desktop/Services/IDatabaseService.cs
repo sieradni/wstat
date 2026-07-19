@@ -13,4 +13,5 @@ public interface IDatabaseService
     List<TimelineEntry> GetTimeline(DateFilter filter, DateTime? specificDate = null);
     int DeleteRecordsForDay(DateTime day);
     int DeleteProblematicRecordsForDay(DateTime day);
+    int DeleteRecordsByIds(List<int> ids);
 }

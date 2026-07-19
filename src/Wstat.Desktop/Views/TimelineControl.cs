@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using MediaBrush = System.Windows.Media.Brush;
 using MediaColor = System.Windows.Media.Color;
@@ -15,14 +16,18 @@ public class TimelineControl : Canvas
     private const double TopMargin = 32;
     private const double RowHeight = 34;
     private const double BarHeight = 26;
+    private const double DragThreshold = 4;
 
     private static readonly Typeface _typeface = new("Segoe UI");
     private static readonly MediaPen _markerPen;
     private static readonly MediaPen _minorPen;
     private static readonly MediaPen _daySepPen;
     private static readonly MediaPen _nowLinePen;
+    private static readonly MediaPen _selectRectPen;
     private static readonly MediaBrush _textBrush;
     private static readonly MediaBrush _zebraBrush;
+    private static readonly MediaBrush _selectFillBrush;
+    private static readonly MediaBrush _selectOverlayBrush;
 
     static TimelineControl()
     {
@@ -40,6 +45,13 @@ public class TimelineControl : Canvas
 
         _textBrush = BrushCache.Get(MediaColor.FromRgb(0x66, 0x66, 0x66));
         _zebraBrush = BrushCache.Get(MediaColor.FromArgb(0x08, 0x00, 0x00, 0x00));
+
+        _selectFillBrush = BrushCache.Get(MediaColor.FromArgb(0x20, 0x42, 0x85, 0xF4));
+        _selectOverlayBrush = BrushCache.Get(MediaColor.FromArgb(0x50, 0x42, 0x85, 0xF4));
+
+        var selectPen = new MediaPen(BrushCache.Get(MediaColor.FromArgb(0x80, 0x42, 0x85, 0xF4)), 1);
+        selectPen.Freeze();
+        _selectRectPen = selectPen;
     }
 
     private List<Models.TimelineEntry> _entries = [];
@@ -48,6 +60,20 @@ public class TimelineControl : Canvas
     private DateTime _overallStart;
     private double _totalHours = 24;
     private List<(Rect Bounds, Models.TimelineEntry Entry)> _entryRects = [];
+
+    private readonly HashSet<Models.TimelineEntry> _selectedEntries = [];
+    private bool _isDragging;
+    private System.Windows.Point _dragStartPoint;
+    private System.Windows.Point _dragEndPoint;
+    private bool _hasMovedPastThreshold;
+
+    public bool IsDragging => _isDragging;
+
+    public IReadOnlyCollection<Models.TimelineEntry> SelectedEntries => _selectedEntries;
+
+    public bool HasSelection => _selectedEntries.Count > 0;
+
+    public event Action? SelectionChanged;
 
     public Models.TimelineEntry? GetEntryAt(System.Windows.Point pos)
     {
@@ -58,11 +84,43 @@ public class TimelineControl : Canvas
         return null;
     }
 
+    public List<Models.TimelineEntry> GetEntriesInRect(System.Windows.Rect rect)
+    {
+        var result = new List<Models.TimelineEntry>();
+        foreach (var (bounds, entry) in _entryRects)
+        {
+            if (bounds.IntersectsWith(rect))
+                result.Add(entry);
+        }
+        return result;
+    }
+
+    public void ClearSelection()
+    {
+        if (_selectedEntries.Count == 0) return;
+        _selectedEntries.Clear();
+        InvalidateVisual();
+        SelectionChanged?.Invoke();
+    }
+
+    public (TimeSpan totalTime, TimeSpan activeTime) GetSelectionInfo()
+    {
+        if (_selectedEntries.Count == 0)
+            return (TimeSpan.Zero, TimeSpan.Zero);
+
+        var minStart = _selectedEntries.Min(e => e.StartTime);
+        var maxEnd = _selectedEntries.Max(e => e.EndTime);
+        var total = maxEnd - minStart;
+        var active = TimeSpan.FromSeconds(_selectedEntries.Sum(e => e.DurationSeconds));
+        return (total, active);
+    }
+
     public TimelineControl()
     {
         Background = System.Windows.Media.Brushes.Transparent;
         ToolTipService.SetInitialShowDelay(this, 0);
         ToolTipService.SetShowDuration(this, 30000);
+        Focusable = true;
     }
 
     public double HourWidth
@@ -99,6 +157,7 @@ public class TimelineControl : Canvas
         }
 
         ToolTip = null;
+        _selectedEntries.Clear();
         InvalidateVisual();
         InvalidateMeasure();
     }
@@ -167,12 +226,157 @@ public class TimelineControl : Canvas
                 dc.DrawRectangle(BrushCache.Get(entry.TitleColor), null, barRect);
                 _entryRects.Add((barRect, entry));
 
+                if (_selectedEntries.Contains(entry))
+                {
+                    dc.DrawRectangle(_selectOverlayBrush, null, barRect);
+                }
+
                 if (width > 20)
                     DrawWindowTitle(dc, entry, left, barY, width);
             }
 
             row++;
         }
+
+        if (_isDragging && _hasMovedPastThreshold)
+        {
+            DrawSelectionRect(dc);
+        }
+    }
+
+    private void DrawSelectionRect(DrawingContext dc)
+    {
+        var x = Math.Min(_dragStartPoint.X, _dragEndPoint.X);
+        var y = Math.Min(_dragStartPoint.Y, _dragEndPoint.Y);
+        var w = Math.Abs(_dragEndPoint.X - _dragStartPoint.X);
+        var h = Math.Abs(_dragEndPoint.Y - _dragStartPoint.Y);
+
+        if (w < 1 && h < 1) return;
+
+        dc.DrawRectangle(_selectFillBrush, _selectRectPen, new System.Windows.Rect(x, y, w, h));
+    }
+
+    protected override void OnMouseLeftButtonDown(System.Windows.Input.MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonDown(e);
+        Focus();
+        CaptureMouse();
+
+        var pos = e.GetPosition(this);
+        _dragStartPoint = pos;
+        _dragEndPoint = pos;
+        _isDragging = true;
+        _hasMovedPastThreshold = false;
+
+        var clickedEntry = GetEntryAt(pos);
+        var isCtrl = Keyboard.Modifiers == ModifierKeys.Control;
+
+        if (isCtrl && clickedEntry != null)
+        {
+            if (!_selectedEntries.Remove(clickedEntry))
+                _selectedEntries.Add(clickedEntry);
+            SelectionChanged?.Invoke();
+        }
+        else if (clickedEntry != null)
+        {
+            if (_selectedEntries.Count != 1 || !_selectedEntries.Contains(clickedEntry))
+            {
+                _selectedEntries.Clear();
+                _selectedEntries.Add(clickedEntry);
+                SelectionChanged?.Invoke();
+            }
+        }
+        else if (!isCtrl)
+        {
+            if (_selectedEntries.Count > 0)
+            {
+                _selectedEntries.Clear();
+                SelectionChanged?.Invoke();
+            }
+        }
+
+        InvalidateVisual();
+    }
+
+    protected override void OnMouseMove(System.Windows.Input.MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (!_isDragging) return;
+
+        var pos = e.GetPosition(this);
+        _dragEndPoint = pos;
+
+        var dx = _dragEndPoint.X - _dragStartPoint.X;
+        var dy = _dragEndPoint.Y - _dragStartPoint.Y;
+        var distSq = dx * dx + dy * dy;
+
+        if (!_hasMovedPastThreshold && distSq > DragThreshold * DragThreshold)
+        {
+            _hasMovedPastThreshold = true;
+        }
+
+        if (_hasMovedPastThreshold)
+        {
+            UpdateRubberBandSelection();
+        }
+
+        InvalidateVisual();
+    }
+
+    protected override void OnMouseLeftButtonUp(System.Windows.Input.MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonUp(e);
+        ReleaseMouseCapture();
+        _isDragging = false;
+        _hasMovedPastThreshold = false;
+        InvalidateVisual();
+    }
+
+    protected override void OnMouseRightButtonDown(System.Windows.Input.MouseButtonEventArgs e)
+    {
+        base.OnMouseRightButtonDown(e);
+        Focus();
+
+        var pos = e.GetPosition(this);
+        var clickedEntry = GetEntryAt(pos);
+
+        if (clickedEntry != null && !_selectedEntries.Contains(clickedEntry))
+        {
+            _selectedEntries.Clear();
+            _selectedEntries.Add(clickedEntry);
+            SelectionChanged?.Invoke();
+            InvalidateVisual();
+        }
+    }
+
+    private void UpdateRubberBandSelection()
+    {
+        var x = Math.Min(_dragStartPoint.X, _dragEndPoint.X);
+        var y = Math.Min(_dragStartPoint.Y, _dragEndPoint.Y);
+        var w = Math.Abs(_dragEndPoint.X - _dragStartPoint.X);
+        var h = Math.Abs(_dragEndPoint.Y - _dragStartPoint.Y);
+
+        var rect = new System.Windows.Rect(x, y, w, h);
+        var isCtrl = Keyboard.Modifiers == ModifierKeys.Control;
+        var intersecting = GetEntriesInRect(rect);
+
+        if (isCtrl)
+        {
+            foreach (var entry in intersecting)
+                _selectedEntries.Add(entry);
+        }
+        else
+        {
+            if (_selectedEntries.Count != intersecting.Count ||
+                !intersecting.All(e => _selectedEntries.Contains(e)))
+            {
+                _selectedEntries.Clear();
+                foreach (var entry in intersecting)
+                    _selectedEntries.Add(entry);
+            }
+        }
+
+        SelectionChanged?.Invoke();
     }
 
     private void DrawBackground(DrawingContext dc, int rowCount)

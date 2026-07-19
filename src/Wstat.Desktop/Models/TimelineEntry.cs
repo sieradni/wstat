@@ -5,6 +5,7 @@ namespace Wstat.Desktop.Models;
 
 public class TimelineEntry
 {
+    public int Id { get; set; }
     public string AppName { get; set; } = "";
     public string WindowTitle { get; set; } = "";
     public string? ProcessPath { get; set; }

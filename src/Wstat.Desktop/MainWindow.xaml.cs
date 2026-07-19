@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using Wstat.Desktop.Common;
 using Wstat.Desktop.Native;
 using Wstat.Desktop.ViewModels;
 
@@ -27,6 +28,9 @@ public partial class MainWindow : Window
 
         PreviewMouseMove += Window_PreviewMouseMove;
         Deactivated += (_, _) => timelinePopup.IsOpen = false;
+
+        timelineControl.SelectionChanged += OnTimelineSelectionChanged;
+        PreviewKeyDown += Window_PreviewKeyDown;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -60,9 +64,84 @@ public partial class MainWindow : Window
         appsBarControl.Render([.. _viewModel.Applications]);
     }
 
+    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete && timelineControl.HasSelection)
+        {
+            DeleteSelected();
+            e.Handled = true;
+        }
+    }
+
+    private void OnTimelineSelectionChanged()
+    {
+        UpdateSelectionInfo();
+    }
+
+    private void UpdateSelectionInfo()
+    {
+        if (!timelineControl.HasSelection)
+        {
+            selectionInfoBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        selectionInfoBar.Visibility = Visibility.Visible;
+
+        var count = timelineControl.SelectedEntries.Count;
+        selectionCountText.Text = count == 1
+            ? "1 entry selected"
+            : $"{count} entries selected";
+
+        var (total, active) = timelineControl.GetSelectionInfo();
+        selectionTotalTimeValue.Text = FormatDurationLong(total);
+        selectionActiveTimeValue.Text = FormatDurationLong(active);
+    }
+
+    private static string FormatDurationLong(TimeSpan ts)
+    {
+        if (ts.TotalHours >= 1)
+            return $"{(int)ts.TotalHours}h {ts.Minutes}m {ts.Seconds}s";
+        if (ts.TotalMinutes >= 1)
+            return $"{ts.Minutes}m {ts.Seconds}s";
+        return $"{ts.Seconds}s";
+    }
+
+    private void ClearSelection_Click(object sender, RoutedEventArgs e)
+    {
+        timelineControl.ClearSelection();
+    }
+
+    private void DeleteSelected_Click(object sender, RoutedEventArgs e)
+    {
+        DeleteSelected();
+    }
+
+    private void DeleteSelected()
+    {
+        if (!timelineControl.HasSelection) return;
+        var selected = timelineControl.SelectedEntries.ToList();
+
+        var count = selected.Count;
+        var msg = count == 1
+            ? $"Delete the selected activity record?"
+            : $"Delete {count} selected activity records?\n\nThis cannot be undone.";
+
+        var result = System.Windows.MessageBox.Show(
+            msg,
+            "Delete Records",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.Yes) return;
+
+        var ids = selected.Select(e => e.Id).ToList();
+        _viewModel.DeleteEntries(ids);
+    }
+
     private void Window_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (timelineControl.IsVisible == false)
+        if (timelineControl.IsVisible == false || timelineControl.IsDragging)
         {
             timelinePopup.IsOpen = false;
             return;

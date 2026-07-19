@@ -350,7 +350,7 @@ public class DatabaseService : IDatabaseService, IDisposable
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = """
-                SELECT AppName, WindowTitle, StartTime,
+                SELECT Id, AppName, WindowTitle, StartTime,
                        COALESCE(EndTime, $now) as EndTime,
                        DurationSeconds, ProcessPath
                 FROM ActivityLog
@@ -368,12 +368,13 @@ public class DatabaseService : IDatabaseService, IDisposable
             {
                 results.Add(new TimelineEntry
                 {
-                    AppName = reader.GetString(0),
-                    WindowTitle = reader.GetString(1),
-                    StartTime = DateTime.ParseExact(reader.GetString(2), Constants.IsoFormat, CultureInfo.InvariantCulture),
-                    EndTime = DateTime.ParseExact(reader.GetString(3), Constants.IsoFormat, CultureInfo.InvariantCulture),
-                    DurationSeconds = reader.GetInt32(4),
-                    ProcessPath = reader.IsDBNull(5) ? null : reader.GetString(5)
+                    Id = reader.GetInt32(0),
+                    AppName = reader.GetString(1),
+                    WindowTitle = reader.GetString(2),
+                    StartTime = DateTime.ParseExact(reader.GetString(3), Constants.IsoFormat, CultureInfo.InvariantCulture),
+                    EndTime = DateTime.ParseExact(reader.GetString(4), Constants.IsoFormat, CultureInfo.InvariantCulture),
+                    DurationSeconds = reader.GetInt32(5),
+                    ProcessPath = reader.IsDBNull(6) ? null : reader.GetString(6)
                 });
             }
         }
@@ -399,6 +400,26 @@ public class DatabaseService : IDatabaseService, IDisposable
                 : (now.Date, null),
             _ => (now.Date, null)
         };
+    }
+
+    public int DeleteRecordsByIds(List<int> ids)
+    {
+        if (ids.Count == 0) return 0;
+
+        _rwLock.EnterWriteLock();
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            var placeholders = string.Join(",", ids.Select((_, i) => $"$id{i}"));
+            cmd.CommandText = $"DELETE FROM ActivityLog WHERE Id IN ({placeholders});";
+            for (int i = 0; i < ids.Count; i++)
+                cmd.Parameters.AddWithValue($"$id{i}", ids[i]);
+            return cmd.ExecuteNonQuery();
+        }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
 
     public void Dispose()
